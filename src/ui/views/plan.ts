@@ -3,10 +3,11 @@ import { generatePlan, prescription, refillDay, reshuffleDay } from '../../core/
 import { clampNumber, cleanText, MAX_NAME } from '../../core/state';
 import { weekdayOf } from '../../core/dates';
 import { MUSCLE_GROUPS, WEEKDAY_NAMES, type PlanDay, type PlannedExercise, type Weekday } from '../../core/types';
-import { EXERCISES, filterExercises, getExercise, type Exercise } from '../../data/exercises';
+import { CORE_EXERCISES, EXERCISES, filterExercises, getExercise, type Exercise } from '../../data/exercises';
 import type { ViewContext } from '../context';
 import { h, select, stepper } from '../dom';
 import { renderDemo } from '../demo';
+import { howTo } from '../howto';
 import { startWorkoutHref } from '../device';
 import { MUSCLE_LABELS } from '../labels';
 
@@ -39,8 +40,7 @@ export function exerciseItem(ctx: ViewContext, pe: PlannedExercise, from: string
     if (!details.open || content.firstChild) return;
     content.append(
       renderDemo(ex, { animate: ctx.animate() }),
-      h('ol', {}, ...ex.steps.map((step) => h('li', {}, step))),
-      h('p', { class: 'note-inline' }, '💡 ', ex.tip),
+      howTo(ex, (d) => [h('ol', {}, ...d.steps.map((step) => h('li', {}, step))), h('p', { class: 'note-inline' }, '💡 ', d.tip)]),
       h('a', { href: `#/exercises/${ex.id}?from=${from}` }, 'Open full guide'),
     );
   });
@@ -218,7 +218,7 @@ function dayCard(ctx: ViewContext, day: PlanDay, index: number): HTMLElement {
     picker.replaceChildren(h('option', { value: '' }, 'Add an exercise…'));
     const list = showAll.checked
       ? EXERCISES
-      : day.muscleGroups.flatMap((g) => filterExercises({ muscle: g, equipment: state.routine.equipment }));
+      : day.muscleGroups.flatMap((g) => filterExercises({ muscle: g, equipment: state.routine.equipment }, CORE_EXERCISES));
     const taken = new Set(day.exercises.map((x) => x.exerciseId));
     const fresh = [...new Map(list.map((ex) => [ex.id, ex])).values()].filter((ex) => !taken.has(ex.id));
     picker.append(...exerciseOptions(fresh));

@@ -1,5 +1,6 @@
-import { EXERCISES, type Exercise } from '../../data/exercises';
+import { CORE_EXERCISES, type Exercise } from '../../data/exercises';
 import { renderDemo } from '../demo';
+import { howTo } from '../howto';
 import { h, svg } from '../dom';
 import { prefersReducedMotion } from '../figure';
 
@@ -50,7 +51,7 @@ export function planSpin(current: number, count: number, rand: () => number = ti
  * A random set of `size` distinct exercises, preferring ones not in `current` so each new
  * set looks fresh. Falls back to repeats only when the library is too small.
  */
-export function pickWheelSet(current: readonly Exercise[] = [], size = WHEEL_SIZE, rand: () => number = timeMixedRandom, library: readonly Exercise[] = EXERCISES): Exercise[] {
+export function pickWheelSet(current: readonly Exercise[] = [], size = WHEEL_SIZE, rand: () => number = timeMixedRandom, library: readonly Exercise[] = CORE_EXERCISES): Exercise[] {
   const shown = new Set(current.map((x) => x.id));
   const shuffle = (list: Exercise[]) => {
     for (let i = list.length - 1; i > 0; i--) {
@@ -117,7 +118,7 @@ export function renderSpinWheel(opts: SpinWheelOptions = {}): HTMLElement {
     show.addEventListener('click', () => {
       const open = show.getAttribute('aria-expanded') !== 'true';
       show.setAttribute('aria-expanded', String(open));
-      demoBox.replaceChildren(...(open ? [h('h3', {}, picked.name), renderDemo(picked, { animate: !prefersReducedMotion() }), h('p', { class: 'muted small' }, picked.tip)] : []));
+      demoBox.replaceChildren(...(open ? [h('h3', {}, picked.name), renderDemo(picked, { animate: !prefersReducedMotion() }), howTo(picked, (d) => [h('p', { class: 'muted small' }, d.tip)])] : []));
     });
     return show;
   };

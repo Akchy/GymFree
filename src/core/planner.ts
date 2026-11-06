@@ -2,7 +2,7 @@
  * Turns a goal + daily routine into a weekly plan of training days and exercises.
  * Everything produced here is a suggestion: the user can edit every field afterwards.
  */
-import { EXERCISES, getExercise, isAvailable, type Exercise } from '../data/exercises';
+import { CORE_EXERCISES, getExercise, isAvailable, type Exercise } from '../data/exercises';
 import { randomId } from './encoding';
 import {
   EXPERIENCE,
@@ -168,7 +168,7 @@ export function exerciseCount(minutes: number, goal: Goal, experience: Experienc
 }
 
 export function candidatesFor(group: MuscleGroup, equipment: Routine['equipment'], experience: Experience): Exercise[] {
-  const available = EXERCISES.filter((x) => x.primary === group && isAvailable(x, equipment));
+  const available = CORE_EXERCISES.filter((x) => x.primary === group && isAvailable(x, equipment));
   const suitable = available.filter((x) => levelRank(x.level) <= levelRank(experience));
   const pool = suitable.length ? suitable : available;
   // Compound movements first: they give the most benefit per minute.
@@ -225,6 +225,12 @@ function selectFor(
   const secondary = sorted.filter((g) => SECONDARY.includes(g));
   const reserve = (sorted.includes('core') ? 1 : 0) + (sorted.includes('cardio') && count >= 6 ? 1 : 0);
   const target = Math.min(count, Math.max(1, count - reserve));
+  // A legs-only day keeps room for glutes and calves, or compound leg lifts would fill every slot.
+  const family = primary.length === 1 && primary[0] === 'legs' ? (['glutes', 'calves'] as const).filter((g) => !sorted.includes(g)) : [];
+  fill(pools(primary), Math.min(target, Math.max(1, target - family.length)));
+  for (const g of family) {
+    if (!chosen.some((x) => x.primary === g)) fill(pools([g]), Math.min(target, chosen.length + 1));
+  }
   fill(pools(primary), target);
   const short = chosen.length < target;
   for (const g of secondary) fill(pools([g]), Math.min(count, chosen.length + 1));

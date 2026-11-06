@@ -65,7 +65,68 @@ MAPPING = {
     "jumping-jack": "Star_Jump",
     "high-knees": "Jogging_Treadmill",
     "jump-rope": "Rope_Jumping",
+    "incline-dumbbell-press": "Incline_Dumbbell_Press",
+    "incline-bench-press": "Barbell_Incline_Bench_Press_-_Medium_Grip",
+    "decline-bench-press": "Decline_Barbell_Bench_Press",
+    "dumbbell-fly": "Dumbbell_Flyes",
+    "pec-deck": "Butterfly",
+    "wide-push-up": "Push-Up_Wide",
+    "decline-push-up": "Push-Ups_With_Feet_Elevated",
+    "inverted-row": "Inverted_Row",
+    "back-extension": "Hyperextensions_Back_Extensions",
+    "superman": "Superman",
+    "two-dumbbell-row": "Bent_Over_Two-Dumbbell_Row",
+    "t-bar-row": "Bent_Over_Two-Arm_Long_Bar_Row",
+    "machine-row": "Leverage_Iso_Row",
+    "close-grip-pulldown": "Close-Grip_Front_Lat_Pulldown",
+    "straight-arm-pulldown": "Straight-Arm_Pulldown",
+    "arnold-press": "Arnold_Dumbbell_Press",
+    "face-pull": "Face_Pull",
+    "reverse-fly": "Reverse_Flyes",
+    "upright-row": "Upright_Barbell_Row",
+    "machine-shoulder-press": "Machine_Shoulder_Military_Press",
+    "band-pull-apart": "Band_Pull_Apart",
+    "incline-dumbbell-curl": "Incline_Dumbbell_Curl",
+    "concentration-curl": "Concentration_Curls",
+    "preacher-curl": "Preacher_Curl",
+    "reverse-curl": "Reverse_Barbell_Curl",
+    "cable-hammer-curl": "Cable_Hammer_Curls_-_Rope_Attachment",
+    "close-grip-bench-press": "Close-Grip_Barbell_Bench_Press",
+    "skull-crusher": "EZ-Bar_Skullcrusher",
+    "triceps-kickback": "Tricep_Dumbbell_Kickback",
+    "rope-overhead-extension": "Cable_Rope_Overhead_Triceps_Extension",
+    "machine-dip": "Dip_Machine",
+    "front-squat": "Front_Squat_Clean_Grip",
+    "smith-machine-squat": "Smith_Machine_Squat",
+    "dumbbell-lunge": "Dumbbell_Lunges",
+    "step-up": "Dumbbell_Step_Ups",
+    "lying-leg-curl": "Lying_Leg_Curls",
+    "sumo-squat": "Plie_Dumbbell_Squat",
+    "good-morning": "Good_Morning",
+    "single-leg-glute-bridge": "Single_Leg_Glute_Bridge",
+    "glute-kickback": "Glute_Kickback",
+    "cable-pull-through": "Pull_Through",
+    "hip-abduction": "Thigh_Abductor",
+    "seated-calf-raise": "Seated_Calf_Raise",
+    "barbell-calf-raise": "Standing_Barbell_Calf_Raise",
+    "leg-press-calf-raise": "Calf_Press_On_The_Leg_Press_Machine",
+    "sit-up": "Sit-Up",
+    "reverse-crunch": "Reverse_Crunch",
+    "bicycle-crunch": "Air_Bike",
+    "russian-twist": "Russian_Twist",
+    "dead-bug": "Dead_Bug",
+    "side-plank": "Side_Bridge",
+    "cable-crunch": "Cable_Crunch",
+    "pallof-press": "Pallof_Press_With_Rotation",
+    "side-bend": "Dumbbell_Side_Bend",
+    "rocket-jump": "Rocket_Jump",
+    "tuck-jump": "Knee_Tuck_Jump",
+    "split-jump": "Split_Jump",
+    "skipping": "Fast_Skipping",
 }
+
+# Source photos stored end-first; swapped so -0 is always the start of the rep.
+SWAP_FRAMES = {"upright-row", "smith-machine-squat", "side-bend"}
 
 
 def main() -> None:
@@ -75,7 +136,8 @@ def main() -> None:
             dest = OUT / f"{ours}-{frame}.webp"
             if dest.exists():
                 continue
-            with urllib.request.urlopen(f"{BASE}/{theirs}/{frame}.jpg", timeout=30) as res:
+            source = 1 - frame if ours in SWAP_FRAMES else frame
+            with urllib.request.urlopen(f"{BASE}/{theirs}/{source}.jpg", timeout=30) as res:
                 img = Image.open(io.BytesIO(res.read())).convert("RGB")
             img = img.resize((WIDTH, round(img.height * WIDTH / img.width)), Image.LANCZOS)
             img.save(dest, "WEBP", quality=72, method=6)

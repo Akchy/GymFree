@@ -201,6 +201,25 @@ test.describe('GymFree end-to-end', () => {
     expect(cb).toBe('none');
   });
 
+  test('extended library loads as it is needed', async ({ page, request }) => {
+    await start(page);
+    await onboard(page);
+    expect(await (await request.get('sw.js')).text()).not.toContain('exercises/library/close-grip');
+    await (await mainNav(page)).getByRole('link', { name: 'Exercises' }).click();
+    await page.getByText('only my equipment').click();
+    const cards = page.locator('.exercise-card');
+    await expect(cards).toHaveCount(24);
+    await page.locator('.load-more').scrollIntoViewIfNeeded();
+    await expect.poll(() => cards.count()).toBeGreaterThan(24);
+
+    await page.goto('./#/exercises/close-grip-ez-bar-curl');
+    await expect(page.getByRole('heading', { name: 'Close-Grip EZ Bar Curl' })).toBeVisible();
+    await expect(page.locator('.detail ol li').first()).toBeVisible();
+    const photo = page.locator('.demo-large img').first();
+    await expect(photo).toBeVisible();
+    await expect.poll(() => photo.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  });
+
   test('exercise library shows animations and still images', async ({ page }) => {
     await start(page);
     await onboard(page);

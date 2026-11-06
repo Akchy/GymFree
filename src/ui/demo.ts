@@ -20,16 +20,23 @@ function img(src: string, alt: string, eager = false): HTMLImageElement {
 
 export function renderDemo(ex: Exercise, opts: DemoOptions): HTMLElement {
   const size = opts.size ?? 'full';
-  const photos = photoUrls(ex.id);
-  if (!photos) {
+  const figure = () => {
     const animate = size === 'full' && opts.animate;
     return h('div', { class: `demo figure-demo ${size}` }, renderFigure(ex.motion, { animate, prop: ex.prop, label: ex.name }));
-  }
-  const [start, end] = photos;
+  };
+  const photos = photoUrls(ex.id);
+  if (!photos) return figure();
+  const demo = renderPhotos(ex, photos, opts.animate, size);
+  // A library photo that was never viewed is not available offline; show the figure instead.
+  demo.addEventListener('error', () => demo.replaceWith(figure()), { capture: true, once: true });
+  return demo;
+}
+
+function renderPhotos(ex: Exercise, [start, end]: [string, string], animate: boolean, size: 'thumb' | 'full'): HTMLElement {
   if (size === 'thumb') {
     return h('div', { class: 'demo thumb' }, img(start, `${ex.name}`));
   }
-  if (opts.animate) {
+  if (animate) {
     return h(
       'div',
       { class: 'demo photo animated', role: 'img', 'aria-label': `${ex.name}: moving between start and end position (animation)` },

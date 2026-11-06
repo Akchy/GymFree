@@ -3,7 +3,15 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { basePath, buildCsp, listFiles } from '../../vite.config';
+import { basePath, buildCsp, isPrecached, listFiles } from '../../vite.config';
+
+describe('precache list', () => {
+  it('leaves library photos out but keeps curated ones', () => {
+    expect(isPrecached('exercises/push-up-0.webp')).toBe(true);
+    expect(isPrecached('exercises/library/x-0.webp')).toBe(false);
+    expect(isPrecached('sw.js')).toBe(false);
+  });
+});
 
 describe('build helpers', () => {
   it('normalises the base path (root by default, subfolder for GitHub Pages)', () => {

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { EXERCISES, getExercise } from '../../src/data/exercises';
+import { CORE_EXERCISES, EXERCISES, getExercise } from '../../src/data/exercises';
 import { PHOTO_EXERCISES, photoUrls } from '../../src/data/photos';
 import { renderDemo } from '../../src/ui/demo';
 import { choiceGroup } from '../../src/ui/dom';
@@ -17,7 +17,25 @@ describe('exercise photos', () => {
   });
 
   it('covers nearly the whole library', () => {
-    expect(PHOTO_EXERCISES.size).toBeGreaterThanOrEqual(EXERCISES.length - 2);
+    expect(PHOTO_EXERCISES.size).toBeGreaterThanOrEqual(CORE_EXERCISES.length - 2);
+  });
+
+  it('has both photo files for every library exercise', () => {
+    for (const ex of EXERCISES.filter((x) => x.library)) {
+      for (const url of photoUrls(ex.id)!) {
+        expect(url).toContain('/exercises/library/');
+        expect(existsSync(resolve(root, 'public', url.slice(1))), url).toBe(true);
+      }
+    }
+  });
+
+  it('falls back to the stick figure when a photo cannot load', () => {
+    const box = document.createElement('div');
+    const demo = renderDemo(EXERCISES.find((x) => x.library)!, { animate: false, size: 'thumb' });
+    box.append(demo);
+    demo.querySelector('img')!.dispatchEvent(new Event('error'));
+    expect(box.querySelector('img')).toBeNull();
+    expect(box.querySelector('svg.exercise-figure')).not.toBeNull();
   });
 
   it('keeps the download script mapping in sync', () => {

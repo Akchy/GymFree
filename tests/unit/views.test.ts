@@ -282,17 +282,40 @@ describe('exercise library', () => {
   it('filters by muscle, equipment and search', async () => {
     await go(app, '/exercises');
     const count = () => root.querySelectorAll('.exercise-card').length;
-    const mineCount = count();
+    const total = () => parseInt(root.querySelector('main > p.muted')!.textContent!, 10);
+    const mineCount = total();
     check(root.querySelector<HTMLInputElement>('#only-mine')!, false);
-    expect(count()).toBeGreaterThan(mineCount);
+    expect(total()).toBeGreaterThan(mineCount);
     change(root.querySelector<HTMLSelectElement>('select[aria-label="Muscle group"]')!, 'biceps');
     expect([...root.querySelectorAll('.exercise-card strong')].map((e) => e.textContent)).toContain('Barbell Curl');
     const search = root.querySelector<HTMLInputElement>('input[type="search"]')!;
-    search.value = 'hammer';
+    search.value = 'zottman preacher';
     search.dispatchEvent(new Event('input'));
     expect(count()).toBe(1);
     expect(root.textContent).toContain('1 exercise');
     expect(root.querySelector('.exercise-card img')).not.toBeNull();
+  });
+
+  it('builds cards a batch at a time and starts over when the filter changes', async () => {
+    await go(app, '/exercises');
+    check(root.querySelector<HTMLInputElement>('#only-mine')!, false);
+    const cards = () => root.querySelectorAll('.exercise-card').length;
+    const more = root.querySelector<HTMLButtonElement>('.load-more')!;
+    expect(cards()).toBe(24);
+    more.click();
+    expect(cards()).toBe(48);
+    expect(more.textContent).toMatch(/Show more \(\d+ left\)/);
+    const search = root.querySelector<HTMLInputElement>('input[type="search"]')!;
+    search.value = 'concentration';
+    search.dispatchEvent(new Event('input'));
+    expect(cards()).toBeLessThan(24);
+    expect(more.hidden).toBe(true);
+  });
+
+  it('loads the steps of a library exercise on demand', async () => {
+    await go(app, '/exercises/close-grip-ez-bar-curl');
+    await vi.waitFor(() => expect(root.querySelectorAll('ol li').length).toBeGreaterThan(1));
+    expect(root.textContent).not.toContain('Loading…');
   });
 
   it('uses photo thumbnails, with the stick figure as fallback', async () => {
@@ -301,6 +324,9 @@ describe('exercise library', () => {
     const pushUp = byText(root, '.exercise-card', /Push-up/);
     expect(pushUp.querySelector('img')?.getAttribute('src')).toBe('/exercises/push-up-0.webp');
     expect(pushUp.querySelector('img')?.getAttribute('loading')).toBe('lazy');
+    const search = root.querySelector<HTMLInputElement>('input[type="search"]')!;
+    search.value = 'burpee';
+    search.dispatchEvent(new Event('input'));
     const burpee = byText(root, '.exercise-card', /Burpee/);
     expect(burpee.querySelector('svg.exercise-figure')).not.toBeNull();
     expect(root.textContent).toContain('public domain');
@@ -586,6 +612,21 @@ describe('progress', () => {
     expect(root.querySelectorAll('.bars li')).toHaveLength(2);
     expect((root.querySelector('.bars .bar') as HTMLElement).style.getPropertyValue('--w')).toBe('100%');
     expect(root.querySelectorAll('.history li')).toHaveLength(2);
+  });
+
+  it('reaches every workout in a long history, a batch at a time', async () => {
+    await seed();
+    const log = state().workouts[0];
+    await app['context']().update((s) => {
+      s.workouts = Array.from({ length: 65 }, (_, i) => ({ ...log, id: `w${i}`, date: `2026-01-${String((i % 28) + 1).padStart(2, '0')}` }));
+    });
+    await go(app, '/progress');
+    const rows = () => root.querySelectorAll('.history li').length;
+    const more = root.querySelector<HTMLButtonElement>('.load-more')!;
+    expect(rows()).toBe(20);
+    for (let i = 0; i < 3; i++) more.click();
+    expect(rows()).toBe(65);
+    expect(more.hidden).toBe(true);
   });
 
   it('deletes a workout after confirmation', async () => {

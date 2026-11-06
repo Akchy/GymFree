@@ -33,13 +33,14 @@ Google sign-in locally, copy `.env.example` to `.env.local` and fill in the two 
 ```
 src/
   core/   pure logic: device store, Supabase cloud, sync rules, planner, progress, validation
-  data/   exercise library (49 exercises), photo index, stick-figure fallback poses
+  data/   107 curated exercises, generated extended library (509), photo index, stick-figure fallback poses
   pwa/    service-worker logic (precache, offline fallback) and install prompt
   ui/     tiny DOM helpers, photo demos, chart, one file per screen
   sw.ts   service-worker entry (built to /sw.js with the precache list injected)
   main.ts wires device store + cloud -> repository -> app, registers the service worker
-public/exercises/  start/end photos (WebP, ~1.4 MB total)
+public/exercises/  start/end photos (WebP, ~3 MB, precached); library/ holds ~14 MB more, fetched when viewed
 scripts/fetch_exercise_images.py  reproducible photo download + conversion
+scripts/generate_library.py  regenerates the extended library (index, steps, photos)
 tests/unit  Vitest (Supabase replaced by an in-memory fake)
 tests/e2e   Playwright (desktop + mobile, incl. offline mode; runs the no-account flow)
 ```

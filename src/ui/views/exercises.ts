@@ -2,12 +2,14 @@ import { prescription } from '../../core/planner';
 import { exerciseSeries, personalRecords } from '../../core/progress';
 import { MUSCLE_GROUPS, type MuscleGroup } from '../../core/types';
 import { formatWeight } from '../../core/units';
-import { filterExercises, getExercise } from '../../data/exercises';
+import { filterExercises, getExercise, type Exercise } from '../../data/exercises';
 import { PHOTO_CREDIT } from '../../data/photos';
+import { createBatches } from '../batches';
 import { lineChart } from '../chart';
 import type { ViewContext } from '../context';
-import { clear, h, select } from '../dom';
+import { h, select } from '../dom';
 import { renderDemo } from '../demo';
+import { howTo } from '../howto';
 import { EQUIPMENT_LABELS, MUSCLE_LABELS } from '../labels';
 
 export function renderExerciseList(ctx: ViewContext): HTMLElement {
@@ -16,24 +18,21 @@ export function renderExerciseList(ctx: ViewContext): HTMLElement {
   const muscleSel = select([['all', 'All muscle groups'] as const, ...MUSCLE_GROUPS.map((g) => [g, MUSCLE_LABELS[g]] as const)], 'all', { 'aria-label': 'Muscle group' });
   const mine = h('input', { type: 'checkbox', id: 'only-mine', checked: true });
   const search = h('input', { type: 'search', placeholder: 'Search exercises', 'aria-label': 'Search exercises' });
-  const grid = h('div', { class: 'grid', 'aria-live': 'polite' });
-  const count = h('p', { class: 'muted' });
+  const grid = h('div', { class: 'grid' });
+  const count = h('p', { class: 'muted', 'aria-live': 'polite' });
+  const card = (ex: Exercise) => h(
+    'a',
+    { href: `#/exercises/${ex.id}`, class: 'card exercise-card' },
+    renderDemo(ex, { animate: false, size: 'thumb' }),
+    h('strong', {}, ex.name),
+    h('span', { class: 'muted' }, `${MUSCLE_LABELS[ex.primary]} · ${ex.equipment.map((e) => EQUIPMENT_LABELS[e]).join(' / ')}`),
+  );
+  const batches = createBatches(grid, card);
 
   const render = () => {
-    clear(grid);
     const list = filterExercises({ muscle, equipment: mine.checked ? state.routine.equipment : undefined, query: search.value });
     count.textContent = `${list.length} exercise${list.length === 1 ? '' : 's'}`;
-    for (const ex of list) {
-      grid.appendChild(
-        h(
-          'a',
-          { href: `#/exercises/${ex.id}`, class: 'card exercise-card' },
-          renderDemo(ex, { animate: false, size: 'thumb' }),
-          h('strong', {}, ex.name),
-          h('span', { class: 'muted' }, `${MUSCLE_LABELS[ex.primary]} · ${ex.equipment.map((e) => EQUIPMENT_LABELS[e]).join(' / ')}`),
-        ),
-      );
-    }
+    batches.show(list);
   };
   muscleSel.addEventListener('change', () => {
     muscle = muscleSel.value as MuscleGroup | 'all';
@@ -49,6 +48,7 @@ export function renderExerciseList(ctx: ViewContext): HTMLElement {
     h('div', { class: 'row filters' }, muscleSel, search, h('label', { class: 'inline', for: 'only-mine' }, mine, ' only my equipment')),
     count,
     grid,
+    batches.more,
     h('p', { class: 'muted small' }, PHOTO_CREDIT),
   );
 }
@@ -102,7 +102,7 @@ export function renderExerciseDetail(ctx: ViewContext, id: string, from = 'libra
     h('a', { href: backHref, class: 'back' }, backLabel),
     h('h1', {}, ex.name),
     h('p', { class: 'muted' }, `${MUSCLE_LABELS[ex.primary]}${ex.secondary.length ? ` (also ${ex.secondary.map((g) => MUSCLE_LABELS[g]).join(', ')})` : ''} · ${ex.equipment.map((e) => EQUIPMENT_LABELS[e]).join(' / ')} · ${ex.level}`),
-    h('div', { class: 'detail' }, h('div', {}, figureBox, toggle), h('div', {}, h('h2', {}, 'How to do it'), h('ol', {}, ...ex.steps.map((s) => h('li', {}, s))), h('p', { class: 'card note' }, '💡 ', ex.tip))),
+    h('div', { class: 'detail' }, h('div', {}, figureBox, toggle), h('div', {}, h('h2', {}, 'How to do it'), howTo(ex, (d) => [h('ol', {}, ...d.steps.map((s) => h('li', {}, s))), h('p', { class: 'card note' }, '💡 ', d.tip)]))),
     state.plan.length ? h('div', { class: 'row' }, daySel, addBtn) : null,
     pr
       ? h(

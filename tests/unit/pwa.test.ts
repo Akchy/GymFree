@@ -97,6 +97,27 @@ describe('service worker core', () => {
     expect(strategyFor(req('https://gym.example/other/', { mode: 'navigate' }), { ...d, scope: 'https://gym.example/app/' })).toBe('passthrough');
   });
 
+  it('fetches library photos on demand, keeps them across deploys and serves them offline', async () => {
+    const url = 'https://gym.example/exercises/library/x-0.webp';
+    const fetch = vi.fn(async () => new Response('photo'));
+    const d = deps({ fetch });
+    expect(strategyFor(req(url), d)).toBe('on-demand');
+    expect(await (await handleFetch(req(url), d))!.text()).toBe('photo');
+    await activate({ ...d, version: 'next' });
+    fetch.mockRejectedValue(new Error('offline'));
+    expect(await (await handleFetch(req(url), d))!.text()).toBe('photo');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not keep failed photo responses', async () => {
+    const url = 'https://gym.example/exercises/library/x-0.webp';
+    const fetch = vi.fn(async () => new Response('nope', { status: 404 }));
+    const d = deps({ fetch });
+    await handleFetch(req(url), d);
+    await handleFetch(req(url), d);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
   it('serves precached files from the cache (cache-first)', async () => {
     const d = deps();
     await install(d);

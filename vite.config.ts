@@ -59,6 +59,9 @@ export function basePath(raw = process.env.BASE_PATH): string {
 
 const NOT_PRECACHED = new Set(['sw.js', '_headers', 'icons/maskable.svg']);
 
+/** Library photos are fetched when viewed (see ON_DEMAND_PATH in src/pwa/sw-core.ts). */
+export const isPrecached = (name: string) => !NOT_PRECACHED.has(name) && !name.startsWith('exercises/library/');
+
 /**
  * Injects the precache list and a content-hash version into the service worker so a new
  * deploy invalidates old caches, and users get the whole app (incl. photos) offline.
@@ -83,7 +86,7 @@ function serviceWorker(): Plugin {
         hash.update(name).update(item.type === 'chunk' ? item.code : item.source);
       }
       for (const name of publicDir ? listFiles(publicDir).sort() : []) {
-        if (NOT_PRECACHED.has(name)) continue;
+        if (!isPrecached(name)) continue;
         files.push(name);
         hash.update(name).update(readFileSync(join(publicDir, name)));
       }

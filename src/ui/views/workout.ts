@@ -14,6 +14,7 @@ import { photoUrls } from '../../data/photos';
 import type { ViewContext } from '../context';
 import { h, svg } from '../dom';
 import { renderDemo } from '../demo';
+import { howTo as renderHowTo } from '../howto';
 import { renderFigure } from '../figure';
 import { MUSCLE_LABELS } from '../labels';
 import { draftToEntries, lastWeight, readDraft, type WorkoutDraft } from './log';
@@ -323,8 +324,7 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
           h('h3', {}, ex.name),
           h('p', { class: 'reel-muscles' }, [ex.primary, ...ex.secondary].map((m) => MUSCLE_LABELS[m]).join(' · ')),
           renderDemo(ex, { animate: false }),
-          h('ol', { class: 'reel-steps' }, ...ex.steps.map((s) => h('li', {}, s))),
-          h('p', { class: 'reel-tip' }, h('strong', {}, 'Tip. '), ex.tip),
+          renderHowTo(ex, (d) => [h('ol', { class: 'reel-steps' }, ...d.steps.map((s) => h('li', {}, s))), h('p', { class: 'reel-tip' }, h('strong', {}, 'Tip. '), d.tip)]),
           h('div', { class: 'reel-hints' }, back),
         ),
       ),

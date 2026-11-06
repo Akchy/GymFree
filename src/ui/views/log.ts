@@ -3,10 +3,11 @@ import { randomId } from '../../core/encoding';
 import { clampNumber, cleanText, MAX_NOTES, MAX_WEIGHT_KG } from '../../core/state';
 import type { LoggedExercise, PlannedExercise, WorkoutLog } from '../../core/types';
 import { fromDisplayWeight, round, toDisplayWeight } from '../../core/units';
-import { EXERCISES, getExercise } from '../../data/exercises';
+import { CORE_EXERCISES, EXERCISES, getExercise } from '../../data/exercises';
 import type { ViewContext } from '../context';
 import { clear, h, stepper } from '../dom';
 import { renderDemo } from '../demo';
+import { howTo as renderHowTo } from '../howto';
 import { isPhone } from '../device';
 import { exerciseOptions, prescriptionText } from './plan';
 
@@ -184,7 +185,7 @@ export function renderLogForm(ctx: ViewContext, dayId: string): HTMLElement {
       const details = h('details', { class: 'how-to-toggle' }, h('summary', {}, 'How to do it'), howTo);
       details.addEventListener('toggle', () => {
         if (!details.open || howTo.firstChild) return;
-        howTo.append(renderDemo(ex, { animate: ctx.animate() }), h('ol', {}, ...ex.steps.map((step) => h('li', {}, step))), h('p', { class: 'note-inline' }, '💡 ', ex.tip));
+        howTo.append(renderDemo(ex, { animate: ctx.animate() }), renderHowTo(ex, (d) => [h('ol', {}, ...d.steps.map((step) => h('li', {}, step))), h('p', { class: 'note-inline' }, '💡 ', d.tip)]));
       });
       list.appendChild(
         h(
@@ -206,8 +207,15 @@ export function renderLogForm(ctx: ViewContext, dayId: string): HTMLElement {
   };
   renderEntries();
 
-  const picker = h('select', { 'aria-label': 'Add exercise' }, h('option', { value: '' }, '+ Add another exercise…'), ...exerciseOptions(EXERCISES));
+  const placeholder = h('option', { value: '' }, '+ Add another exercise…');
+  // The full library is only built if asked for.
+  const picker = h('select', { 'aria-label': 'Add exercise' }, placeholder, ...exerciseOptions(CORE_EXERCISES), h('option', { value: 'all' }, `Show all ${EXERCISES.length} exercises…`));
   picker.addEventListener('change', () => {
+    if (picker.value === 'all') {
+      picker.replaceChildren(placeholder, ...exerciseOptions(EXERCISES));
+      picker.value = '';
+      return;
+    }
     if (!getExercise(picker.value)) return;
     entries.push({ exerciseId: picker.value, target: null, sets: [{ reps: null, weightKg: null }] });
     picker.value = '';

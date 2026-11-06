@@ -1,3 +1,4 @@
+import type { WorkoutLog } from '../../core/types';
 import { daysBetween, isISODate } from '../../core/dates';
 import {
   exerciseSeries,
@@ -13,6 +14,7 @@ import { clampNumber } from '../../core/state';
 import type { MuscleGroup } from '../../core/types';
 import { formatWeight, fromDisplayWeight, round, toDisplayWeight } from '../../core/units';
 import { getExercise } from '../../data/exercises';
+import { createBatches } from '../batches';
 import { lineChart } from '../chart';
 import type { ViewContext } from '../context';
 import { h, stepper } from '../dom';
@@ -69,7 +71,22 @@ export function renderProgress(ctx: ViewContext): HTMLElement {
   const maxCount = Math.max(1, ...Object.values(counts));
   const prs = personalRecords(state.workouts).slice(0, 10);
 
-  const history = [...state.workouts].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 50);
+  const history = [...state.workouts].sort((a, b) => b.date.localeCompare(a.date));
+  const historyRow = (w: WorkoutLog) => {
+    const del = h('button', { type: 'button', class: 'icon danger', 'aria-label': `Delete workout from ${w.date}` }, '✕');
+    del.addEventListener('click', () => {
+      if (!confirm(`Delete the workout from ${w.date}?`)) return;
+      void ctx.update((s) => {
+        s.workouts = s.workouts.filter((x) => x.id !== w.id);
+        s.deletedWorkoutIds.push(w.id); // so another device's copy doesn't bring it back
+      });
+    });
+    const dayName = state.plan.find((d) => d.id === w.dayId)?.name ?? 'Workout';
+    return h('li', {}, h('span', {}, h('strong', {}, w.date), ` · ${dayName} · ${w.entries.length} exercises · ${formatWeight(workoutVolume(w), units)}`), del);
+  };
+  const historyList = h('ul', { class: 'history' });
+  const historyBatches = createBatches(historyList, historyRow, 20);
+  historyBatches.show(history);
 
   return h(
     'main',
@@ -124,18 +141,7 @@ export function renderProgress(ctx: ViewContext): HTMLElement {
       { class: 'card' },
       h('h2', {}, 'History'),
       history.length
-        ? h('ul', { class: 'history' }, ...history.map((w) => {
-            const del = h('button', { type: 'button', class: 'icon danger', 'aria-label': `Delete workout from ${w.date}` }, '✕');
-            del.addEventListener('click', () => {
-              if (!confirm(`Delete the workout from ${w.date}?`)) return;
-              void ctx.update((s) => {
-                s.workouts = s.workouts.filter((x) => x.id !== w.id);
-                s.deletedWorkoutIds.push(w.id); // so another device's copy doesn't bring it back
-              });
-            });
-            const dayName = state.plan.find((d) => d.id === w.dayId)?.name ?? 'Workout';
-            return h('li', {}, h('span', {}, h('strong', {}, w.date), ` · ${dayName} · ${w.entries.length} exercises · ${formatWeight(workoutVolume(w), units)}`), del);
-          }))
+        ? h('div', {}, historyList, historyBatches.more)
         : h('p', { class: 'muted' }, 'No workouts logged yet.'),
     ),
   );

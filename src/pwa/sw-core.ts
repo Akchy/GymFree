@@ -5,9 +5,13 @@
  * - activate: delete caches from older versions.
  * - fetch: page navigations are network-first (fresh deploys win) with the cached shell
  *   as offline fallback; precached files are cache-first (instant loads, offline).
+ *   Library photos are too many to precache: each is fetched when first viewed, then kept in
+ *   its own cache that survives deploys, so it stays available offline.
  *   Anything else (e.g. a storage API) is not intercepted.
  */
 export const CACHE_PREFIX = 'gymfree-';
+export const PHOTO_CACHE = `${CACHE_PREFIX}photos`;
+export const ON_DEMAND_PATH = 'exercises/library/';
 
 export interface CacheLike {
   addAll(requests: Request[]): Promise<void>;
@@ -45,12 +49,12 @@ export async function install(deps: SwDeps): Promise<void> {
 
 export async function activate(deps: Pick<SwDeps, 'caches' | 'version'>): Promise<string[]> {
   const keep = cacheName(deps.version);
-  const stale = (await deps.caches.keys()).filter((k) => k.startsWith(CACHE_PREFIX) && k !== keep);
+  const stale = (await deps.caches.keys()).filter((k) => k.startsWith(CACHE_PREFIX) && k !== keep && k !== PHOTO_CACHE);
   await Promise.all(stale.map((k) => deps.caches.delete(k)));
   return stale;
 }
 
-export type Strategy = 'navigate' | 'precached' | 'passthrough';
+export type Strategy = 'navigate' | 'precached' | 'on-demand' | 'passthrough';
 
 export function strategyFor(request: Pick<Request, 'url' | 'method' | 'mode'>, deps: Pick<SwDeps, 'scope' | 'manifest'>): Strategy {
   if (request.method !== 'GET') return 'passthrough';
@@ -58,6 +62,7 @@ export function strategyFor(request: Pick<Request, 'url' | 'method' | 'mode'>, d
   const scope = new URL(deps.scope);
   if (url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return 'passthrough';
   if (request.mode === 'navigate') return 'navigate';
+  if (url.pathname.startsWith(`${scope.pathname}${ON_DEMAND_PATH}`)) return 'on-demand';
   const clean = `${url.origin}${url.pathname}`;
   return precacheUrls(deps).includes(clean) ? 'precached' : 'passthrough';
 }
@@ -66,6 +71,16 @@ export function strategyFor(request: Pick<Request, 'url' | 'method' | 'mode'>, d
 export async function handleFetch(request: Request, deps: SwDeps): Promise<Response | null> {
   const strategy = strategyFor(request, deps);
   if (strategy === 'passthrough') return null;
+  if (strategy === 'on-demand') {
+    const photos = await deps.caches.open(PHOTO_CACHE);
+    const url = new URL(request.url);
+    const key = `${url.origin}${url.pathname}`;
+    const cached = await photos.match(key);
+    if (cached) return cached;
+    const response = await deps.fetch(request);
+    if (response.ok) await photos.put(key, response.clone());
+    return response;
+  }
   const cache = await deps.caches.open(cacheName(deps.version));
   if (strategy === 'precached') {
     const url = new URL(request.url);

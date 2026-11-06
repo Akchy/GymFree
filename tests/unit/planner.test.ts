@@ -192,11 +192,27 @@ describe('primary-group weighting', () => {
     const picked = pickExercises(['cardio', 'core'], 4, gym, 'intermediate').map((x) => x.primary);
     expect(picked).toEqual(['core', 'cardio', 'core', 'cardio']);
   });
+  it('never picks library exercises for a generated day', () => {
+    for (const group of ['chest', 'back', 'legs', 'core', 'biceps'] as const) {
+      for (const variant of [0, 1, 2, 3]) {
+        expect(pickExercises([group], 8, gym, 'advanced', variant).filter((x) => x.library)).toEqual([]);
+      }
+    }
+  });
   it('draws glutes and calves into a legs day', () => {
     const picked = pickExercises(['legs'], 5, { equipment: ['bodyweight'] }, 'intermediate').map((x) => x.primary);
     expect(picked).toContain('glutes');
     expect(picked).toContain('calves');
     expect(picked[0]).toBe('legs');
+  });
+  it('keeps glutes and calves on a legs day even with plenty of compound leg lifts', () => {
+    for (const variant of [0, 1, 2, 3]) {
+      const picked = pickExercises(['legs'], 5, gym, 'intermediate', variant).map((x) => x.primary);
+      expect(picked, `variant ${variant}`).toHaveLength(5);
+      expect(picked, `variant ${variant}`).toContain('glutes');
+      expect(picked, `variant ${variant}`).toContain('calves');
+      expect(picked[0], `variant ${variant}`).toBe('legs');
+    }
   });
 });
 
