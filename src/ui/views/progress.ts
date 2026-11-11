@@ -1,13 +1,11 @@
-import type { WorkoutLog } from '../../core/types';
 import { daysBetween, isISODate } from '../../core/dates';
 import {
-  exerciseSeries,
   loggedExerciseIds,
   muscleGroupCounts,
   personalRecords,
   type PersonalRecord,
   secondsPerRepSeries,
-  workingSeconds,
+  sessionVolumeSeries,
   weekStreak,
   weightChange,
   workoutVolume,
@@ -17,14 +15,14 @@ import { clampNumber } from '../../core/state';
 import type { MuscleGroup } from '../../core/types';
 import { formatWeight, fromDisplayWeight, round, toDisplayWeight } from '../../core/units';
 import { amountText, getExercise, isTimed } from '../../data/exercises';
-import { createBatches } from '../batches';
-import { lineChart } from '../chart';
+import { barChart, lineChart } from '../chart';
 import type { ViewContext } from '../context';
 import { h } from '../dom';
 import { numberWheel } from '../number-wheel';
 import { MUSCLE_LABELS } from '../labels';
 
-export function renderProgress(ctx: ViewContext): HTMLElement {
+/** The Stats tab of History: summary numbers, volume chart, records, muscle sets and body weight. */
+export function renderStats(ctx: ViewContext): HTMLElement {
   const { state } = ctx;
   const units = state.settings.units;
   const today = ctx.today();
@@ -57,9 +55,9 @@ export function renderProgress(ctx: ViewContext): HTMLElement {
       );
       return;
     }
-    const weighted = !isTimed(ex) && state.workouts.some((w) => w.entries.some((e) => e.exerciseId === exSel.value && e.sets.some((s) => s.weightKg > 0)));
-    const series = exerciseSeries(state.workouts, exSel.value).map((p) => (weighted ? { ...p, value: toDisplayWeight(p.value, units) } : p));
-    chartBox.replaceChildren(lineChart(series, `${ex?.name} progress`, weighted ? ` ${units} (est. 1RM)` : isTimed(ex) ? ' s' : ' reps'));
+    const { unit, points } = sessionVolumeSeries(state.workouts, exSel.value);
+    const shown = unit === 'kg' ? points.map((p) => ({ ...p, value: toDisplayWeight(p.value, units) })) : points;
+    chartBox.replaceChildren(barChart(shown, `${ex?.name}: volume per session`, unit === 'kg' ? ` ${units}` : ` ${unit}`));
   };
   exSel.addEventListener('change', drawChart);
   metricSel.addEventListener('change', drawChart);
@@ -103,29 +101,9 @@ export function renderProgress(ctx: ViewContext): HTMLElement {
     return p.bestWeightKg > 0 ? `${formatWeight(p.bestWeightKg, units)} (est. 1RM ${formatWeight(p.bestOneRepMax, units)})` : `${p.bestReps} reps`;
   };
 
-  const history = [...state.workouts].sort((a, b) => b.date.localeCompare(a.date));
-  const historyRow = (w: WorkoutLog) => {
-    const del = h('button', { type: 'button', class: 'icon danger', 'aria-label': `Delete workout from ${w.date}` }, '✕');
-    del.addEventListener('click', () => {
-      if (!confirm(`Delete the workout from ${w.date}?`)) return;
-      void ctx.update((s) => {
-        s.workouts = s.workouts.filter((x) => x.id !== w.id);
-        s.deletedWorkoutIds.push(w.id); // so another device's copy doesn't bring it back
-      });
-    });
-    const dayName = state.plan.find((d) => d.id === w.dayId)?.name ?? 'Workout';
-    const working = workingSeconds(w);
-    const time = working === null ? '' : ` · ⏱ ${working < 60 ? `${working} s` : `${Math.round(working / 60)} min`} working`;
-    return h('li', {}, h('span', {}, h('strong', {}, w.date), ` · ${dayName} · ${w.entries.length} exercises · ${formatWeight(workoutVolume(w), units)}${time}`), del);
-  };
-  const historyList = h('ul', { class: 'history' });
-  const historyBatches = createBatches(historyList, historyRow, 20);
-  historyBatches.show(history);
-
   return h(
-    'main',
-    { class: 'container' },
-    h('h1', {}, 'Progress'),
+    'div',
+    { class: 'stats-view' },
     h(
       'section',
       { class: 'stats', 'aria-label': 'Summary' },
@@ -169,14 +147,6 @@ export function renderProgress(ctx: ViewContext): HTMLElement {
       lineChart(state.bodyLogs.map((b) => ({ date: b.date, value: toDisplayWeight(b.weightKg, units) })), 'Body weight', ` ${units}`),
       bwForm,
       bwError,
-    ),
-    h(
-      'section',
-      { class: 'card' },
-      h('h2', {}, 'History'),
-      history.length
-        ? h('div', {}, historyList, historyBatches.more)
-        : h('p', { class: 'muted' }, 'No workouts logged yet.'),
     ),
   );
 }

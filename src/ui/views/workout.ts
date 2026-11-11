@@ -446,7 +446,7 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
     await ctx.update((s) => s.workouts.push(log), { render: false });
     ctx.repo.setDraft(dayId, null);
     ctx.toast('Workout saved. Nice job!');
-    ctx.navigate('/progress');
+    ctx.navigate('/history');
   });
 
   const feed = h('div', { class: 'reel-feed' }, ...cards.map(buildPage), summary);

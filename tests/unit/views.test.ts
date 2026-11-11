@@ -661,54 +661,51 @@ describe('workout logging', () => {
   });
 });
 
-describe('progress', () => {
+describe('history', () => {
+  const ex = (exerciseId: string, sets: { reps: number; weightKg: number; seconds?: number }[]) => ({ exerciseId, sets });
   async function seed() {
     await app['context']().update((s) => {
       s.workouts = [
-        { id: 'w1', date: '2026-10-20', dayId: s.plan[0].id, entries: [{ exerciseId: 'dumbbell-curl', sets: [{ reps: 10, weightKg: 10 }] }, { exerciseId: 'push-up', sets: [{ reps: 15, weightKg: 0 }] }], durationMin: null, notes: '' },
-        { id: 'w2', date: '2026-10-27', dayId: null, entries: [{ exerciseId: 'dumbbell-curl', sets: [{ reps: 10, weightKg: 12 }] }], durationMin: null, notes: '' },
+        { id: 'w0', date: '2026-10-08', dayId: null, entries: [ex('push-up', [{ reps: 12, weightKg: 0 }])], durationMin: null, notes: '' },
+        { id: 'w1', date: '2026-10-20', dayId: s.plan[0].id, entries: [ex('dumbbell-curl', [{ reps: 10, weightKg: 10 }]), ex('push-up', [{ reps: 15, weightKg: 0 }])], durationMin: 48, notes: '' },
+        { id: 'w2', date: '2026-10-27', dayId: null, entries: [ex('dumbbell-curl', [{ reps: 10, weightKg: 12 }])], durationMin: null, notes: '' },
       ];
     });
-    await go(app, '/progress');
+    await go(app, '/history');
   }
 
-  it('shows stats, charts, records and muscle group bars', async () => {
+  it('groups workouts by week with rows for each', async () => {
     await seed();
-    expect(root.querySelector('.stats')?.textContent).toContain('2total workouts');
-    expect(root.querySelector('.stats')?.textContent).toContain('2week streak');
-    expect(root.querySelector('.chart-wrap figcaption')?.textContent).toContain('kg (est. 1RM)');
-    change(root.querySelector<HTMLSelectElement>('select[aria-label="Exercise to chart"]')!, 'push-up');
-    expect(root.querySelector('.chart-wrap figcaption')?.textContent).toContain('reps');
-    expect(root.querySelectorAll('.bars li')).toHaveLength(2);
-    expect((root.querySelector('.bars .bar') as HTMLElement).style.getPropertyValue('--w')).toBe('100%');
-    expect(root.querySelectorAll('.history li')).toHaveLength(2);
+    expect(root.querySelector('main h1')?.textContent).toBe('History');
+    expect([...root.querySelectorAll('h2.history-week')].map((e) => e.textContent)).toEqual([
+      'This week · 1 workout',
+      'Last week · 1 workout',
+      'Week of 5 Oct · 1 workout',
+    ]);
+    const rows = [...root.querySelectorAll<HTMLAnchorElement>('a.history-row')];
+    expect(rows.map((r) => r.getAttribute('href'))).toEqual(['#/history/w2', '#/history/w1', '#/history/w0']);
+    expect(rows[0].textContent).toContain('Free workout');
+    expect(rows[0].textContent).toContain('Tue 27 Oct');
+    expect(rows[0].textContent).toContain('1 ex');
+    expect(rows[0].textContent).not.toContain('min');
+    expect(rows[1].textContent).toContain(state().plan[0].name);
+    expect(rows[1].textContent).toContain('Tue 20 Oct');
+    expect(rows[1].textContent).toContain('48 min');
+    expect(rows[1].textContent).toContain('2 ex');
   });
 
-  it('shows working time in the history and charts seconds per rep where sets were timed', async () => {
+  it('has Workouts and Stats tabs', async () => {
     await seed();
-    // Without timed sets: no working time, no seconds-per-rep choice
-    expect(root.querySelector('.history')?.textContent).not.toContain('working');
-    const metric = root.querySelector<HTMLSelectElement>('select[aria-label="What to chart"]')!;
-    expect(metric.hidden).toBe(true);
-    await app['context']().update((s) => {
-      s.workouts[0].entries[0].sets = [{ reps: 10, weightKg: 10, seconds: 30 }];
-      s.workouts[1].entries[0].sets = [{ reps: 10, weightKg: 12, seconds: 25 }, { reps: 8, weightKg: 12 }];
-    });
-    await go(app, '/progress');
-    expect([...root.querySelectorAll('.history li')].map((li) => li.textContent)).toEqual([
-      expect.stringContaining('⏱ 25 s working'),
-      expect.stringContaining('⏱ 30 s working'),
-    ]);
-    const sel = root.querySelector<HTMLSelectElement>('select[aria-label="What to chart"]')!;
-    expect(sel.hidden).toBe(false);
-    change(sel, 'pace');
-    expect(root.querySelector('svg.chart')?.getAttribute('aria-label')).toBe('Dumbbell Biceps Curl: seconds per rep');
-    expect(root.querySelector('.chart-wrap figcaption')?.textContent).toBe('2026-10-20: 3 s per rep → 2026-10-27: 2.5 s per rep');
-    expect([...root.querySelectorAll('.chart title')].map((t) => t.textContent)).toEqual(['2026-10-20: 3 s per rep', '2026-10-27: 2.5 s per rep']);
-    // An exercise without timed sets falls back to the usual chart
-    change(root.querySelector<HTMLSelectElement>('select[aria-label="Exercise to chart"]')!, 'push-up');
-    expect(sel.hidden).toBe(true);
-    expect(root.querySelector('.chart-wrap figcaption')?.textContent).toContain('reps');
+    const tabs = () => [...root.querySelectorAll<HTMLAnchorElement>('.segmented[role="tablist"] a[role="tab"]')];
+    expect(tabs().map((t) => [t.getAttribute('href'), t.getAttribute('aria-selected')])).toEqual([['#/history', 'true'], ['#/history?view=stats', 'false']]);
+    await go(app, '/history?view=stats');
+    expect(tabs().map((t) => t.getAttribute('aria-selected'))).toEqual(['false', 'true']);
+  });
+
+  it('shows an empty state with a link home', async () => {
+    await go(app, '/history');
+    expect(root.textContent).toContain('No workouts yet.');
+    expect(byText<HTMLAnchorElement>(root, 'a', 'Home').getAttribute('href')).toBe('#/');
   });
 
   it('reaches every workout in a long history, a batch at a time', async () => {
@@ -717,8 +714,8 @@ describe('progress', () => {
     await app['context']().update((s) => {
       s.workouts = Array.from({ length: 65 }, (_, i) => ({ ...log, id: `w${i}`, date: `2026-01-${String((i % 28) + 1).padStart(2, '0')}` }));
     });
-    await go(app, '/progress');
-    const rows = () => root.querySelectorAll('.history li').length;
+    await go(app, '/history');
+    const rows = () => root.querySelectorAll('a.history-row').length;
     const more = root.querySelector<HTMLButtonElement>('.load-more')!;
     expect(rows()).toBe(20);
     for (let i = 0; i < 3; i++) more.click();
@@ -726,20 +723,59 @@ describe('progress', () => {
     expect(more.hidden).toBe(true);
   });
 
-  it('deletes a workout after confirmation', async () => {
-    await seed();
-    const spy = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
-    root.querySelector<HTMLButtonElement>('.history button')!.click();
-    await settle(app);
-    expect(state().workouts).toHaveLength(2);
-    root.querySelector<HTMLButtonElement>('.history button')!.click();
-    await settle(app);
-    expect(spy).toHaveBeenCalledTimes(2);
-    expect(state().workouts.map((w) => w.id)).toEqual(['w1']);
+  it('redirects /progress to the Stats tab', async () => {
+    await go(app, '/progress');
+    expect(window.location.hash).toBe('#/history?view=stats');
+    expect(root.querySelector('.segmented a[aria-selected="true"]')?.textContent).toBe('Stats');
   });
 
+  it('shows stats, a volume bar chart, records and muscle group bars', async () => {
+    await seed();
+    await go(app, '/history?view=stats');
+    expect(root.querySelector('.stats')?.textContent).toContain('3total workouts');
+    change(root.querySelector<HTMLSelectElement>('select[aria-label="Exercise to chart"]')!, 'dumbbell-curl');
+    expect(root.querySelector('svg.chart')?.getAttribute('aria-label')).toBe('Dumbbell Biceps Curl: volume per session');
+    expect(root.querySelectorAll('svg.chart rect.bar')).toHaveLength(2);
+    expect(root.querySelector('svg.chart title')?.textContent).toBe('2026-10-20: 100 kg');
+    change(root.querySelector<HTMLSelectElement>('select[aria-label="Exercise to chart"]')!, 'push-up');
+    expect(root.querySelector('svg.chart')?.getAttribute('aria-label')).toBe('Push-up: volume per session');
+    expect(root.querySelectorAll('svg.chart rect.bar')).toHaveLength(2);
+    expect(root.querySelector('svg.chart title')?.textContent).toBe('2026-10-08: 12 reps');
+    expect(root.textContent).toContain('Personal records');
+    expect(root.querySelectorAll('.bars li')).toHaveLength(2);
+    expect(root.querySelector('#bw-value')).not.toBeNull();
+    expect(root.querySelector('.history-row')).toBeNull();
+  });
+
+  it('charts volume in pounds for lb users', async () => {
+    await seed();
+    await app['context']().update((s) => (s.settings.units = 'lb'));
+    await go(app, '/history?view=stats');
+    change(root.querySelector<HTMLSelectElement>('select[aria-label="Exercise to chart"]')!, 'dumbbell-curl');
+    expect(root.querySelector('svg.chart title')?.textContent).toBe('2026-10-20: 220.5 lb');
+  });
+
+  it('charts seconds per rep where sets were timed', async () => {
+    await seed();
+    await app['context']().update((s) => {
+      s.workouts[1].entries[0].sets = [{ reps: 10, weightKg: 10, seconds: 30 }];
+      s.workouts[2].entries[0].sets = [{ reps: 10, weightKg: 12, seconds: 25 }, { reps: 8, weightKg: 12 }];
+    });
+    await go(app, '/history?view=stats');
+    change(root.querySelector<HTMLSelectElement>('select[aria-label="Exercise to chart"]')!, 'dumbbell-curl');
+    const sel = root.querySelector<HTMLSelectElement>('select[aria-label="What to chart"]')!;
+    expect(sel.hidden).toBe(false);
+    change(sel, 'pace');
+    expect(root.querySelector('svg.chart')?.getAttribute('aria-label')).toBe('Dumbbell Biceps Curl: seconds per rep');
+    expect([...root.querySelectorAll('.chart title')].map((t) => t.textContent)).toEqual(['2026-10-20: 3 s per rep', '2026-10-27: 2.5 s per rep']);
+    change(root.querySelector<HTMLSelectElement>('select[aria-label="Exercise to chart"]')!, 'push-up');
+    expect(sel.hidden).toBe(true);
+  });
+
+  // Deleting a workout moved to its detail page (Task 7 adds the test there).
+
   it('records body weight and validates it', async () => {
-    await go(app, '/progress');
+    await go(app, '/history?view=stats');
     expect(root.textContent).toContain('Log a workout to see your progress here.');
     const form = () => root.querySelector<HTMLFormElement>('#bw-value')!.form!;
     root.querySelector<HTMLInputElement>('#bw-value')!.value = '';

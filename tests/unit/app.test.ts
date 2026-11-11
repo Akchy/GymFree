@@ -186,7 +186,7 @@ describe('App: links opened before choosing where the data lives', () => {
   });
 
   it('forgets the link when the user goes home first', async () => {
-    const { app, root } = await makeApp(undefined, { hash: '#/progress' });
+    const { app, root } = await makeApp(undefined, { hash: '#/history' });
     await go(app, '/');
     byText(root, 'button', 'Use without an account').click();
     await settle(app);
@@ -196,15 +196,15 @@ describe('App: links opened before choosing where the data lives', () => {
 
   it('opens the linked page after coming back from Google sign-in', async () => {
     const cloud = new FakeCloud();
-    const { app, root } = await makeApp(undefined, { cloud, hash: '#/progress' });
+    const { app, root } = await makeApp(undefined, { cloud, hash: '#/history' });
     byText(root, 'button', 'Continue with Google').click();
     await settle(app);
     expect(cloud.signIns).toBe(1);
     // Google sends the user back to the base URL, without the hash.
     const back = signedIn();
     const { root: root2 } = await makeApp(undefined, { cloud: back, keepSession: true });
-    expect(window.location.hash).toBe('#/progress');
-    expect(root2.querySelector('main h1')?.textContent).toBe('Progress');
+    expect(window.location.hash).toBe('#/history');
+    expect(root2.querySelector('main h1')?.textContent).toBe('History');
     expect(sessionStorage.getItem('gymx:returnTo')).toBeNull();
   });
 });
@@ -250,7 +250,7 @@ describe('App: everyday use', () => {
     s.onboarded = false;
     const { app } = await makeApp(s);
     expect(window.location.hash).toBe('#/onboarding');
-    await go(app, '/progress');
+    await go(app, '/history');
     expect(window.location.hash).toBe('#/onboarding');
 
     const { app: app2, root: root2 } = await makeApp(onboardedState());
@@ -270,7 +270,8 @@ describe('App: everyday use', () => {
       ['/exercises/push-up', 'Push-up'],
       ['/exercises/push-up?from=plan', 'Push-up'],
       ['/log/free', 'Free workout'],
-      ['/progress', 'Progress'],
+      ['/history', 'History'],
+      ['/history?view=stats', 'History'],
       ['/settings', 'Settings'],
       ['/onboarding', 'Update goal & routine'],
     ];

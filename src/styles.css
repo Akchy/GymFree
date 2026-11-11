@@ -610,3 +610,4 @@ body:has(.reel) .toast.show { transform: translateX(-50%) translateY(0); }
 .reel-rest-adjust { display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.35rem; visibility: hidden; }
 .reel-page[data-mode='rest'] .reel-rest-adjust { visibility: visible; }
 .reel-rest-btn { padding: 0.3rem 0.8rem; border-radius: 999px; border: 1px solid var(--border); background: var(--accent-soft); color: var(--text); font-size: 0.85rem; font-weight: 600; touch-action: manipulation; }
+.chart .bar { height: auto; background: none; fill: var(--accent); }

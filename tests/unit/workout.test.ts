@@ -231,7 +231,7 @@ describe('workout mode', () => {
     time += 20 * 60 * 1000;
     byText(root.querySelector('.reel-summary') as HTMLElement, 'button', 'Save workout').click();
     await settle(app);
-    expect(window.location.hash).toBe('#/progress');
+    expect(window.location.hash).toBe('#/history');
     const log = state().workouts.at(-1)!;
     expect(log).toMatchObject({ date: '2026-10-27', dayId: day().id, durationMin: 21 });
     // The timed set keeps its time; the set added by hand has none

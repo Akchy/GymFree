@@ -15,11 +15,11 @@ import { prefersReducedMotion } from './figure';
 import { effectiveTheme, setTheme, THEME_EVENT } from './theme';
 import { renderDashboard } from './views/dashboard';
 import { renderExerciseDetail, renderExerciseList } from './views/exercises';
+import { renderHistory } from './views/history';
 import { renderLogForm } from './views/log';
 import { renderNotFound } from './views/notfound';
 import { renderOnboarding } from './views/onboarding';
 import { renderDayEditor, renderPlan } from './views/plan';
-import { renderProgress } from './views/progress';
 import { renderSettings, syncStatusText } from './views/settings';
 import { renderLinkChoice, renderUnavailable, renderWelcome } from './views/welcome';
 import { renderWorkout } from './views/workout';
@@ -33,15 +33,14 @@ export interface AppOptions {
 
 const NAV = [
   ['/', 'Home'],
+  ['/history', 'History'],
   ['/plan', 'Plan'],
   ['/exercises', 'Exercises'],
-  ['/log', 'Log'],
-  ['/progress', 'Progress'],
   ['/settings', 'Settings'],
 ] as const;
 
 /** First path segment of every page; anything else is "Page not found". */
-const SECTIONS = new Set(['', 'onboarding', 'plan', 'exercises', 'log', 'workout', 'progress', 'settings']);
+const SECTIONS = new Set(['', 'onboarding', 'plan', 'exercises', 'log', 'workout', 'history', 'progress', 'settings']);
 /**
  * The page a link pointed to before the welcome screen. Kept in sessionStorage because
  * Google sign-in leaves the app and comes back to the base URL, without the hash.
@@ -404,9 +403,15 @@ export class App {
         if (param === 'free' || !isPhone()) return this.navigate(`/log/${param}`);
         view = this.state.plan.some((d) => d.id === decodeURIComponent(param)) ? renderWorkout(ctx, decodeURIComponent(param)) : renderNotFound({ path, hasData: true });
         break;
-      case 'progress':
-        view = renderProgress(ctx);
+      case 'history':
+        if (param) {
+          view = renderNotFound({ path, hasData: true }); // detail and edit pages come later
+          break;
+        }
+        view = renderHistory(ctx, new URLSearchParams(query).get('view') === 'stats' ? 'stats' : 'workouts');
         break;
+      case 'progress':
+        return this.navigate('/history?view=stats');
       case 'settings':
         view = renderSettings(ctx);
         break;
