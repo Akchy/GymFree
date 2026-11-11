@@ -27,12 +27,24 @@ function icon(d: string, size = 24): SVGElement {
 export const GEAR_ICON =
   'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z';
 
+/** The app logo (same drawing as public/favicon.svg): a lime "G" whose crossbar is a dumbbell. */
+export function logoMark(size = 28): SVGElement {
+  return svg(
+    'svg',
+    { viewBox: '0 0 64 64', width: size, height: size, 'aria-hidden': 'true', class: 'logo-mark' },
+    svg('rect', { width: 64, height: 64, rx: 14, fill: '#0b0b0c' }),
+    svg('path', { d: 'M46 20.5A17 17 0 1 0 49 34H33', fill: 'none', stroke: '#c8f169', 'stroke-width': 8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
+    svg('rect', { x: 28.5, y: 27, width: 6, height: 14, rx: 2, fill: '#f2f2f2' }),
+    svg('rect', { x: 47, y: 27, width: 6, height: 14, rx: 2, fill: '#f2f2f2' }),
+  );
+}
+
 export function renderNav(path: string): HTMLElement {
   const active = activeNav(path);
   return h(
     'nav',
     { class: 'appnav', 'aria-label': 'Main' },
-    h('a', { href: '#/', class: 'brand' }, 'GymFree'),
+    h('a', { href: '#/', class: 'brand' }, logoMark(), 'GymFree'),
     ...NAV_ITEMS.map((it) => h('a', { href: `#${it.href}`, class: 'nav-item', 'aria-current': active === it.href ? 'page' : null }, icon(it.icon), h('span', {}, it.label))),
     h('a', { href: '#/settings', class: 'nav-settings', 'aria-current': active === '/settings' ? 'page' : null }, icon(GEAR_ICON, 20), h('span', {}, 'Settings')),
   );

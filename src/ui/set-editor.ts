@@ -1,5 +1,8 @@
 /** Shared per-exercise set editor: one compact row of wheels per set (used by the entry screen and by editing past workouts). */
 import { clampNumber, MAX_WEIGHT_KG } from '../core/state';
+
+/** Longest time a set can be edited to (one hour). */
+const MAX_SET_SEC = 3600;
 import type { PlannedExercise, WorkoutLog } from '../core/types';
 import { fromDisplayWeight, round, toDisplayWeight } from '../core/units';
 import { CORE_EXERCISES, EXERCISES, getExercise, isTimed } from '../data/exercises';
@@ -38,11 +41,13 @@ export interface SetEditorOptions {
   workouts: readonly WorkoutLog[];
   animate: boolean;
   onChange: () => void;
+  /** Show and edit each set's time (editing a past workout). Without it, changing the reps clears the time. */
+  showTime?: boolean;
 }
 
 /** Edits `opts.entries` in place and calls `onChange` after every change. */
 export function renderSetEditor(opts: SetEditorOptions): HTMLElement {
-  const { entries, units, workouts, animate, onChange } = opts;
+  const { entries, units, workouts, animate, onChange, showTime = false } = opts;
   const maxWeight = toDisplayWeight(MAX_WEIGHT_KG, units);
   const list = h('div', { class: 'stack set-groups' });
 
@@ -67,7 +72,7 @@ export function renderSetEditor(opts: SetEditorOptions): HTMLElement {
           const next = reps.value === '' ? null : Math.round(clampNumber(reps.value, 0, 1000, 0));
           if (next === set.reps) return;
           set.reps = next;
-          delete set.seconds; // the old time no longer describes this set
+          if (!showTime) delete set.seconds; // the old time no longer describes this set (unless it can be edited)
         };
         reps.addEventListener('input', readReps); // while typing, so a draft is never behind
         reps.addEventListener('change', readReps);
@@ -88,6 +93,19 @@ export function renderSetEditor(opts: SetEditorOptions): HTMLElement {
         };
         weight.addEventListener('input', () => readWeight(false));
         weight.addEventListener('change', () => readWeight(true));
+        // A timed exercise's amount already is its time, so only sets counted in reps get a time wheel.
+        let time: HTMLInputElement | null = null;
+        if (showTime && !timed) {
+          const input = h('input', { type: 'number', min: 0, max: MAX_SET_SEC, step: 1, inputmode: 'numeric', class: 'num', value: set.seconds ?? '', placeholder: '–', 'aria-label': `${name} set ${si + 1} time (seconds)` });
+          const readTime = () => {
+            const sec = input.value === '' ? 0 : Math.round(clampNumber(input.value, 0, MAX_SET_SEC, 0));
+            if (sec > 0) set.seconds = sec;
+            else delete set.seconds;
+          };
+          input.addEventListener('input', readTime);
+          input.addEventListener('change', readTime);
+          time = input;
+        }
         const remove = h('button', { type: 'button', class: 'icon danger', 'aria-label': `Remove set ${si + 1} of ${name}` }, '✕');
         remove.addEventListener('click', () => {
           entry.sets.splice(si, 1);
@@ -100,6 +118,7 @@ export function renderSetEditor(opts: SetEditorOptions): HTMLElement {
           h('span', { class: 'set-wheel' }, numberWheel(reps)),
           h('span', { class: 'set-x', 'aria-hidden': 'true' }, '×'),
           h('span', { class: 'set-wheel' }, numberWheel(weight, units === 'kg' ? 2.5 : 5)),
+          time ? h('span', { class: 'set-wheel set-time' }, numberWheel(time, 5)) : null,
           entry.sets.length > 1 ? remove : null,
         );
       });
@@ -126,10 +145,10 @@ export function renderSetEditor(opts: SetEditorOptions): HTMLElement {
       list.appendChild(
         h(
           'section',
-          { class: 'card set-group log-entry' },
+          { class: `card set-group log-entry${showTime && !timed ? ' with-time' : ''}` },
           h('div', { class: 'set-head' }, h('div', {}, h('h2', {}, name), entry.target ? h('p', { class: 'muted' }, `Target: ${prescriptionText(entry.target)}`) : null), info),
           howTo,
-          h('div', { class: 'set-cols muted' }, h('span', {}, 'Set'), h('span', {}, timed ? 'Seconds' : 'Reps'), h('span', {}, `Weight (${units})`)),
+          h('div', { class: 'set-cols muted' }, h('span', {}, 'Set'), h('span', {}, timed ? 'Seconds' : 'Reps'), h('span', {}, showTime && !timed ? units : `Weight (${units})`), showTime && !timed ? h('span', {}, 'Time (s)') : null),
           ...rows,
           h('div', { class: 'row' }, addSet, removeEx),
         ),

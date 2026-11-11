@@ -124,6 +124,32 @@ test.describe('GymFree end-to-end', () => {
     await expect(page.locator('meta[name=viewport]')).not.toHaveAttribute('content', /user-scalable=no/);
   });
 
+  test('workout mode on a short phone: each set chip shows its time without scrolling, and the time can be edited', async ({ page }) => {
+    test.skip(test.info().project.name !== 'mobile', 'workout mode is for phones');
+    await page.setViewportSize({ width: 360, height: 640 });
+    await start(page);
+    await onboard(page);
+    await page.goto('./#/plan');
+    await page.getByRole('link', { name: 'Start this workout' }).first().click();
+    const card = page.locator('.reel-page').first();
+    await card.getByRole('button', { name: /^Start set of/ }).click();
+    await page.waitForTimeout(1100);
+    await card.getByRole('button', { name: /^Stop and log set/ }).click();
+    await expect(card.locator('.reel-set-time')).toBeVisible();
+    const fit = await card.locator('.reel-sets').evaluate((s) => [s.scrollHeight, s.clientHeight]);
+    expect(fit[0]).toBeLessThanOrEqual(fit[1]);
+    const body = await card.locator('.reel-body').evaluate((b) => [b.scrollHeight, b.clientHeight]);
+    expect(body[0]).toBeLessThanOrEqual(body[1] + 2);
+    // Tapping the saved set lets its time be changed, in 5 s steps.
+    await card.locator('.reel-set.done').first().click();
+    const sheet = page.getByRole('dialog', { name: 'Edit set 1' });
+    await sheet.getByRole('button', { name: 'More time' }).click();
+    await expect(sheet.locator('.sheet-row', { hasText: 'Time' })).toContainText('5 s');
+    await sheet.getByRole('button', { name: 'More time' }).click();
+    await sheet.getByRole('button', { name: 'Done' }).click();
+    await expect(card.locator('.reel-set.done').first()).toContainText('10 s');
+  });
+
   test('edit the plan only when asked, then log a workout set by set', async ({ page }) => {
     await start(page);
     await onboard(page);

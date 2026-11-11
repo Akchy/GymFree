@@ -41,19 +41,13 @@ describe('theme contrast', () => {
       expect(contrast(t('--accent-text'), t('--accent'))).toBeGreaterThanOrEqual(4.5);
     });
   }
-  it('workout mode keeps its frozen colours', () => {
-    const reel = css.split('\n').filter((l) => l.startsWith('.reel {')).length;
-    expect(reel).toBeGreaterThan(0);
-    const light = block('.reel');
-    expect(token(light, '--accent')).toBe('#0f766e');
-    expect(token(light, '--surface')).toBe('#ffffff');
-    const media = css.indexOf('@media (prefers-color-scheme: dark)', css.indexOf('.reel {'));
-    const scoped = block(":root:not([data-theme='light']) .reel", media);
-    expect(token(scoped, '--accent')).toBe('#2dd4bf');
-    expect(token(scoped, '--surface')).toBe('#181c21');
-    const forced = block(":root[data-theme='dark'] .reel");
-    expect(token(forced, '--accent')).toBe('#2dd4bf');
-    expect(token(forced, '--surface')).toBe('#181c21');
+  it('highlights the current History tab (marked aria-current="true")', () => {
+    expect(css).toMatch(/\.segmented a\[aria-current='true'\][^{]*\{[^}]*background: var\(--accent\)/);
+  });
+  it('workout mode uses the app palette (no colours of its own)', () => {
+    expect(css).not.toMatch(/\.reel\s*\{[^}]*--accent:/);
+    expect(css).not.toContain('#0f766e');
+    expect(css).not.toContain('#2dd4bf');
   });
 });
 

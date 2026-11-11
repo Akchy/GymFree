@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupByWeek, removeWorkout, saveWorkout, upsertWorkout } from '../../src/core/history';
+import { editedDuration, groupByWeek, removeWorkout, saveWorkout, upsertWorkout } from '../../src/core/history';
 import type { WorkoutLog } from '../../src/core/types';
 import { onboardedState } from './helpers';
 
@@ -85,5 +85,38 @@ describe('groupByWeek', () => {
       '2026-10-27',
     );
     expect(groups[0].workouts.map((x) => x.id)).toEqual(['b', 'c', 'a']);
+  });
+});
+
+describe('editedDuration', () => {
+  const w = (durationMin: number | null, sets: { reps: number; weightKg: number; seconds?: number }[]): WorkoutLog => ({
+    id: 'w', date: '2026-11-10', dayId: null, durationMin, notes: '', entries: [{ exerciseId: 'push-up', sets }],
+  });
+  const curl = (seconds?: number) => (seconds === undefined ? { reps: 10, weightKg: 10 } : { reps: 10, weightKg: 10, seconds });
+
+  it('moves the recorded duration by the change in set times', () => {
+    const before = w(40, [curl(60), curl(60)]);
+    expect(editedDuration(before, [{ exerciseId: 'push-up', sets: [curl(180), curl(180)] }])).toBe(44);
+    expect(editedDuration(before, [{ exerciseId: 'push-up', sets: [curl(60)] }])).toBe(39);
+  });
+
+  it('is never shorter than the set times added up', () => {
+    expect(editedDuration(w(2, [curl(60)]), [{ exerciseId: 'push-up', sets: [curl(600)] }])).toBe(11);
+    expect(editedDuration(w(10, [curl(60)]), [{ exerciseId: 'push-up', sets: [curl(1200)] }])).toBe(29);
+  });
+
+  it('keeps a typed-in duration when the workout had no set times, unless the new times need longer', () => {
+    expect(editedDuration(w(30, [curl()]), [{ exerciseId: 'push-up', sets: [curl(120)] }])).toBe(30);
+    expect(editedDuration(w(1, [curl()]), [{ exerciseId: 'push-up', sets: [curl(150)] }])).toBe(3);
+  });
+
+  it('with no recorded duration, uses the set times, or stays empty without them', () => {
+    expect(editedDuration(w(null, [curl()]), [{ exerciseId: 'push-up', sets: [curl(90)] }])).toBe(2);
+    expect(editedDuration(w(null, [curl()]), [{ exerciseId: 'push-up', sets: [curl()] }])).toBeNull();
+  });
+
+  it('stays within 0 to 600 minutes', () => {
+    expect(editedDuration(w(1, [curl(600)]), [{ exerciseId: 'push-up', sets: [curl(1)] }])).toBe(1);
+    expect(editedDuration(w(599, [curl(1)]), [{ exerciseId: 'push-up', sets: Array.from({ length: 20 }, () => curl(3600)) }])).toBe(600);
   });
 });

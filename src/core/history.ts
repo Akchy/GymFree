@@ -1,5 +1,24 @@
 import { addDays, startOfWeek } from './dates';
-import type { AppState, WorkoutLog } from './types';
+import { workingSeconds } from './progress';
+import type { AppState, LoggedExercise, WorkoutLog } from './types';
+
+/** Longest workout duration that can be stored, in minutes. */
+const MAX_DURATION_MIN = 600;
+
+/**
+ * The duration after a past workout's sets were edited, worked out instead of typed: the
+ * recorded duration (which includes rests) moves by however much the set times changed,
+ * and is never shorter than the set times added up. With no recorded duration and no set
+ * times there is nothing to go on, so it stays empty.
+ */
+export function editedDuration(before: WorkoutLog, entries: readonly LoggedExercise[]): number | null {
+  const was = workingSeconds(before);
+  const now = workingSeconds({ ...before, entries: [...entries] });
+  const atLeast = now ? Math.ceil(now / 60) : 0;
+  if (before.durationMin === null) return now ? Math.min(atLeast, MAX_DURATION_MIN) : null;
+  const moved = was === null ? before.durationMin : before.durationMin + ((now ?? 0) - was) / 60;
+  return Math.min(MAX_DURATION_MIN, Math.max(atLeast, Math.round(moved), 0));
+}
 
 export interface WeekGroup {
   weekStart: string;

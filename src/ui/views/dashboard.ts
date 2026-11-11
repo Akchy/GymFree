@@ -37,7 +37,7 @@ function inProgress(ctx: ViewContext, dayId: string): HTMLElement | null {
 }
 
 /** "Different workout": any other plan day, or a free workout. */
-function otherWorkouts(ctx: ViewContext, skipId?: string): HTMLElement {
+export function otherWorkouts(ctx: ViewContext, skipId?: string): HTMLElement {
   const days = orderedDays(ctx.state.plan).filter((d) => d.id !== skipId);
   return h(
     'details',

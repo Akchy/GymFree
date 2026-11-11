@@ -773,10 +773,25 @@ describe('history', () => {
     expect(tabs().map((t) => t.getAttribute('aria-current'))).toEqual([null, 'true']);
   });
 
-  it('shows an empty state with a link home', async () => {
+  it("with no workouts, shows a card to start today's plan day", async () => {
     await go(app, '/history');
-    expect(root.textContent).toContain('No workouts yet.');
-    expect(byText<HTMLAnchorElement>(root, 'a', 'Home').getAttribute('href')).toBe('#/');
+    const card = root.querySelector('.first-workout')!;
+    expect(card.querySelector('h2')?.textContent).toBe('Your first workout is waiting');
+    const day = state().plan[0];
+    expect(card.textContent).toContain(`Today · ${day.name}`);
+    expect(card.textContent).toMatch(new RegExp(`${day.exercises.length} exercises · ~\\d+ min`));
+    expect(byText<HTMLAnchorElement>(card, 'a', 'Start workout').getAttribute('href')).toBe(`#/log/${day.id}`);
+    expect(byText(card, 'summary', 'Different workout')).toBeTruthy();
+    expect(byText<HTMLAnchorElement>(card, 'a', 'Free workout').getAttribute('href')).toBe('#/log/free');
+  });
+
+  it('with no workouts and no plan, offers to create a plan', async () => {
+    await app['context']().update((s) => {
+      s.plan = [];
+    });
+    await go(app, '/history');
+    const card = root.querySelector('.first-workout')!;
+    expect(byText<HTMLAnchorElement>(card, 'a', 'Create a plan').getAttribute('href')).toBe('#/onboarding');
   });
 
   it('reaches every workout in a long history, a batch at a time', async () => {
@@ -890,13 +905,16 @@ describe('workout detail and edit', () => {
     expect(byText(root, 'a', 'Edit').getAttribute('href')).toBe('#/history/w1/edit');
     expect(root.querySelector('h1')?.textContent).toBe(state().plan[0].name);
     expect(root.querySelector('.detail-meta')?.textContent).toBe('Tue 20 Oct · 48 min');
-    expect([...root.querySelectorAll('.chip')].map((c) => c.textContent)).toEqual(['3 exercises', '4 sets', '740 kg']);
-    const lines = [...root.querySelectorAll('.detail-exercise')].map((l) => l.textContent);
-    expect(lines).toEqual(['Dumbbell Biceps Curl10 × 40 · 8 × 42.5 kg', 'Push-up15', 'Plank45 s']);
+    expect([...root.querySelectorAll('.chip')].map((c) => c.textContent)).toEqual(['3 exercises', '4 sets', '740 kg', '⏱ 45 s working']);
+    const sets = [...root.querySelectorAll('.detail-exercise')].map((l) => [l.querySelector('strong')?.textContent, [...l.querySelectorAll('.detail-set')].map((p) => p.textContent)]);
+    expect(sets).toEqual([['Dumbbell Biceps Curl', ['10 × 40 kg', '8 × 42.5 kg']], ['Push-up', ['15 reps']], ['Plank', ['45 s']]]);
     expect(root.textContent).toContain('Felt strong');
     await go(app, '/history/w2');
     expect(root.querySelector('h1')?.textContent).toBe('Free workout');
     expect(root.querySelector('.detail-meta')?.textContent).toBe('Tue 27 Oct');
+    // Times from workout mode: under each set, and the total as a chip.
+    expect(root.querySelector('.detail-set')?.textContent).toBe('12 reps⏱ 30 s');
+    expect([...root.querySelectorAll('.chip')].map((c) => c.textContent)).toContain('⏱ 30 s working');
   });
 
   it('edits a set and saves: same id, updatedAt set, count unchanged', async () => {
@@ -912,6 +930,29 @@ describe('workout detail and edit', () => {
     expect(w.notes).toBe('Felt strong');
     expect(w.dayId).toBe(state().plan[0].id);
     expect(window.location.hash).toBe('#/history/w1');
+  });
+
+  it('edits set times (not for timed exercises) and works the duration out from them', async () => {
+    await seed();
+    await go(app, '/history/w2/edit');
+    expect(root.querySelector('#edit-duration')).toBeNull();
+    const time = root.querySelector<HTMLInputElement>('input[aria-label="Push-up set 1 time (seconds)"]')!;
+    expect(time.value).toBe('30');
+    // Changing the reps keeps the time here, since it can be edited.
+    change(root.querySelector<HTMLInputElement>('input[aria-label="Push-up set 1 reps"]')!, '14');
+    change(time, '150');
+    await submit();
+    const w2 = state().workouts.find((x) => x.id === 'w2')!;
+    expect(w2.entries[0].sets[0]).toEqual({ reps: 14, weightKg: 0, seconds: 150 });
+    expect(w2.durationMin).toBe(3); // no recorded duration: the set times, rounded up to minutes
+
+    await go(app, '/history/w1/edit');
+    expect(root.querySelector('input[aria-label="Plank set 1 time (seconds)"]')).toBeNull();
+    change(root.querySelector<HTMLInputElement>('input[aria-label="Push-up set 1 time (seconds)"]')!, '120');
+    await submit();
+    const w1 = state().workouts.find((x) => x.id === 'w1')!;
+    expect(w1.entries[1].sets[0].seconds).toBe(120);
+    expect(w1.durationMin).toBe(50); // 48 min plus the 2 minutes added
   });
 
   it('saving an edit of a workout deleted meanwhile adds a new workout, not the old id', async () => {

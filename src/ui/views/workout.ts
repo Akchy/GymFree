@@ -60,6 +60,8 @@ const REST_STEP_SEC = 15;
 const TIME_STEP_SEC = 5;
 const DEFAULT_GOAL_SEC = 30;
 const MAX_REST_SEC = 600;
+/** Longest time a set can be edited to (one hour). */
+const MAX_SET_SEC = 3600;
 
 /** mm:ss for a number of seconds. */
 export function clock(sec: number): string {
@@ -151,7 +153,9 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
   const sheetWeight = h('span', { class: 'chip-value' });
   const sheetReps = h('span', { class: 'chip-value' });
   const sheetRepsLabel = h('span', {}, 'Reps');
+  const sheetTime = h('span', { class: 'chip-value' });
   let sheetRepsRow: HTMLElement;
+  let sheetTimeRow: HTMLElement;
   const sheetChip = (label: string | HTMLElement, value: HTMLElement, change: (s: WorkoutSet, dir: -1 | 1) => void, names: [string, string]) => {
     const btn = (dir: -1 | 1) => {
       const b = h('button', { type: 'button', 'aria-label': names[dir < 0 ? 0 : 1] }, dir < 0 ? '−' : '+');
@@ -175,6 +179,8 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
     sheetTitle,
     sheetChip('Weight', sheetWeight, (s, d) => (s.weightKg = stepWeight(s.weightKg, d)), ['Less weight', 'More weight']),
     (sheetRepsRow = sheetChip(sheetRepsLabel, sheetReps, (s, d) => editing && (s.reps = stepAmount(editing.card.ex, s.reps, d)), ['Fewer reps', 'More reps'])),
+    // How long a set counted in reps took; a timed exercise edits its time in the row above.
+    (sheetTimeRow = sheetChip('Time', sheetTime, (s, d) => (s.seconds = stepSeconds(s.seconds ?? 0, d, MAX_SET_SEC)), ['Less time', 'More time'])),
     h('div', { class: 'sheet-actions' }, deleteBtn, doneBtn),
   );
   const paintSheet = () => {
@@ -188,6 +194,8 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
     less.setAttribute('aria-label', timed ? 'Less time' : 'Fewer reps');
     more.setAttribute('aria-label', timed ? 'More time' : 'More reps');
     sheetReps.textContent = amountText(editing.card.ex, s.reps);
+    sheetTimeRow.hidden = timed;
+    sheetTime.textContent = s.seconds ? durationText(s.seconds) : '—';
   };
   const openSheet = (card: Card, index: number, opener: HTMLElement) => {
     editing = { card, index, opener };
