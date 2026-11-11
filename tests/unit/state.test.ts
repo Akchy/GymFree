@@ -129,3 +129,12 @@ describe('sanitizeState', () => {
     expect(Number.isNaN(Date.parse(sanitizeState({ version: 1, createdAt: 'nope' }).createdAt))).toBe(false);
   });
 });
+
+describe('workoutLog updatedAt', () => {
+  it('keeps a valid updatedAt and drops an invalid one', () => {
+    expect(workoutLog({ id: 'a', date: '2026-10-01', entries: [], updatedAt: '2026-10-01T00:00:00.000Z' })?.updatedAt).toBe(
+      '2026-10-01T00:00:00.000Z',
+    );
+    expect(workoutLog({ id: 'a', date: '2026-10-01', entries: [], updatedAt: 'nope' })).not.toHaveProperty('updatedAt');
+  });
+});

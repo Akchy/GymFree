@@ -168,6 +168,7 @@ export function workoutLog(v: unknown): WorkoutLog | null {
       .filter((x): x is LoggedExercise => x !== null),
     durationMin: optionalNumber(v.durationMin, 0, 600),
     notes: cleanText(v.notes, MAX_NOTES),
+    ...(typeof v.updatedAt === 'string' && !Number.isNaN(Date.parse(v.updatedAt)) ? { updatedAt: v.updatedAt } : {}),
   };
 }
 

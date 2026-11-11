@@ -96,6 +96,8 @@ export interface WorkoutLog {
   entries: LoggedExercise[];
   durationMin: number | null;
   notes: string;
+  /** ISO timestamp of the last edit; missing on data saved before it existed. */
+  updatedAt?: string;
 }
 
 export interface BodyLog {

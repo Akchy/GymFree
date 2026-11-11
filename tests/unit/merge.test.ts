@@ -66,4 +66,39 @@ describe('mergeVersions', () => {
     expect(merged.goal).toBe('endurance');
     expect(merged.plan).toHaveLength(1);
   });
+
+  it('keeps the more recently edited copy of a workout, whichever device saved last', () => {
+    const base = onboardedState();
+    const w = { ...workout('w1', '2026-10-26'), durationMin: 30 };
+    const a = structuredClone(base);
+    a.workouts = [{ ...w, notes: 'edited', updatedAt: '2026-10-27T10:00:00.000Z' }];
+    const b = structuredClone(base);
+    b.workouts = [{ ...w, updatedAt: '2026-10-26T18:00:00.000Z' }];
+    const merged = mergeVersions(
+      { state: a, updatedAt: '2026-10-27T10:00:01.000Z' },
+      { state: b, updatedAt: '2026-10-27T11:00:00.000Z' },
+    );
+    expect(merged.workouts[0].notes).toBe('edited');
+  });
+
+  it('treats a workout without updatedAt as oldest, and falls back to the newer version on a tie', () => {
+    const base = onboardedState();
+    const a = structuredClone(base);
+    a.workouts = [{ ...workout('w1'), notes: 'stamped', updatedAt: '2026-10-27T10:00:00.000Z' }];
+    const b = structuredClone(base);
+    b.workouts = [{ ...workout('w1'), notes: 'legacy' }];
+    const va = { state: a, updatedAt: '2026-10-27T10:00:01.000Z' };
+    const vb = { state: b, updatedAt: '2026-10-27T11:00:00.000Z' };
+    expect(mergeVersions(va, vb).workouts[0].notes).toBe('stamped');
+
+    const c = structuredClone(base);
+    c.workouts = [{ ...workout('w1'), notes: 'tie-a', updatedAt: '2026-10-27T10:00:00.000Z' }];
+    const d = structuredClone(base);
+    d.workouts = [{ ...workout('w1'), notes: 'tie-b', updatedAt: '2026-10-27T10:00:00.000Z' }];
+    const merged = mergeVersions(
+      { state: c, updatedAt: '2026-10-27T10:00:01.000Z' },
+      { state: d, updatedAt: '2026-10-27T11:00:00.000Z' },
+    );
+    expect(merged.workouts[0].notes).toBe('tie-b');
+  });
 });

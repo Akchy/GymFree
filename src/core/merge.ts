@@ -3,7 +3,8 @@
  * phone logged a workout while the computer changed a setting).
  *
  * - Workouts: kept from both, except ones deleted on either device; if both have the same
- *   workout, the newer version's copy is used.
+ *   workout, the copy edited most recently (`updatedAt`) is used; a copy without `updatedAt`
+ *   counts as oldest, and on a tie the newer version's copy wins.
  * - Body-weight entries: combined by date; on the same date the newer version wins.
  * - Everything else (goal, profile, plan, settings): taken from the newer version.
  */
@@ -21,7 +22,13 @@ export function mergeVersions(a: Version, b: Version): AppState {
   const deleted = new Set([...older.deletedWorkoutIds, ...newer.deletedWorkoutIds]);
 
   const workouts = new Map<string, WorkoutLog>();
-  for (const w of [...older.workouts, ...newer.workouts]) if (!deleted.has(w.id)) workouts.set(w.id, w);
+  const editedAt = (w: WorkoutLog) => (w.updatedAt ? Date.parse(w.updatedAt) : -Infinity);
+  for (const w of [...older.workouts, ...newer.workouts]) {
+    if (deleted.has(w.id)) continue;
+    const have = workouts.get(w.id);
+    // Later entries come from the newer version, so `>=` makes it win ties.
+    if (!have || editedAt(w) >= editedAt(have)) workouts.set(w.id, w);
+  }
 
   const bodyLogs = new Map<string, BodyLog>();
   for (const b of [...older.bodyLogs, ...newer.bodyLogs]) bodyLogs.set(b.date, b);
