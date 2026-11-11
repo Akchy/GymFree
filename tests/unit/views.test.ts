@@ -741,10 +741,11 @@ describe('history', () => {
 
   it('has Workouts and Stats tabs', async () => {
     await seed();
-    const tabs = () => [...root.querySelectorAll<HTMLAnchorElement>('.segmented[role="tablist"] a[role="tab"]')];
-    expect(tabs().map((t) => [t.getAttribute('href'), t.getAttribute('aria-selected')])).toEqual([['#/history', 'true'], ['#/history?view=stats', 'false']]);
+    const tabs = () => [...root.querySelectorAll<HTMLAnchorElement>('nav[aria-label="History view"].segmented a')];
+    expect(root.querySelector('[role="tab"], [role="tablist"]')).toBeNull();
+    expect(tabs().map((t) => [t.getAttribute('href'), t.getAttribute('aria-current')])).toEqual([['#/history', 'page'], ['#/history?view=stats', null]]);
     await go(app, '/history?view=stats');
-    expect(tabs().map((t) => t.getAttribute('aria-selected'))).toEqual(['false', 'true']);
+    expect(tabs().map((t) => t.getAttribute('aria-current'))).toEqual([null, 'page']);
   });
 
   it('shows an empty state with a link home', async () => {
@@ -771,7 +772,7 @@ describe('history', () => {
   it('redirects /progress to the Stats tab', async () => {
     await go(app, '/progress');
     expect(window.location.hash).toBe('#/history?view=stats');
-    expect(root.querySelector('.segmented a[aria-selected="true"]')?.textContent).toBe('Stats');
+    expect(root.querySelector('.segmented a[aria-current="page"]')?.textContent).toBe('Stats');
   });
 
   it('shows stats, a volume bar chart, records and muscle group bars', async () => {
@@ -900,6 +901,8 @@ describe('workout detail and edit', () => {
     expect(ids).toHaveLength(2);
     expect(ids).not.toContain('w1');
     expect(ids).toContain('w2');
+    const fresh = ids.find((id) => id !== 'w2')!;
+    expect(window.location.hash).toBe(`#/history/${fresh}`);
   });
 
   describe('continue this workout', () => {

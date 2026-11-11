@@ -13,11 +13,15 @@ async function start(page: Page) {
   await expect(page.getByRole('heading', { name: "Let's set you up" })).toBeVisible();
 }
 
-/** The main nav, opening the hamburger menu first on narrow screens. */
-async function mainNav(page: Page) {
-  const menu = page.getByRole('button', { name: 'Open menu' });
-  if (await menu.isVisible()) await menu.click();
+/** The main nav: a bottom bar on phones, a sidebar from 768px. */
+function mainNav(page: Page) {
   return page.getByRole('navigation', { name: 'Main' });
+}
+
+/** Settings: the gear on Home (phones) or the pinned sidebar link (wide). */
+async function openSettings(page: Page) {
+  await page.goto('./#/');
+  await page.getByRole('link', { name: 'Settings' }).click();
 }
 
 async function onboard(page: Page) {
@@ -69,7 +73,7 @@ test.describe('GymFree end-to-end', () => {
   test('fixed plan: learn an exercise in place and come back to the plan', async ({ page }) => {
     await start(page);
     await onboard(page);
-    await (await mainNav(page)).getByRole('link', { name: 'Plan' }).click();
+    await mainNav(page).getByRole('link', { name: 'Plan' }).click();
     await expect(page.getByRole('heading', { name: 'My weekly plan' })).toBeVisible();
     // Read-only: no form controls until the user chooses to edit
     await expect(page.locator('main input, main select')).toHaveCount(0);
@@ -151,19 +155,16 @@ test.describe('GymFree end-to-end', () => {
     // Every exercise starts with exactly one empty set
     const entries = page.locator('.log-entry');
     const count = await entries.count();
-    for (let i = 0; i < count; i++) await expect(entries.nth(i).locator('tbody tr')).toHaveCount(1);
+    for (let i = 0; i < count; i++) await expect(entries.nth(i).locator('.set-row')).toHaveCount(1);
     await expect(page.getByLabel('Hammer Curl set 1 reps')).toHaveValue('');
 
     const hammer = page.locator('.log-entry', { hasText: 'Hammer Curl' });
-    await hammer.getByText('How to do it').click();
+    await hammer.getByRole('button', { name: 'How to do Hammer Curl' }).click();
     await expect(hammer.locator('.how-to .demo img').first()).toBeVisible();
 
     await page.getByLabel('Hammer Curl set 1 reps').fill('12');
     await page.getByLabel('Hammer Curl set 1 weight (kg)').fill('14');
-    // Switching theme mid-workout must not wipe what was typed
-    await page.getByRole('button', { name: 'Switch to dark theme' }).click();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await expect(page.getByLabel('Hammer Curl set 1 weight (kg)')).toHaveValue('14');
+    await hammer.getByRole('button', { name: '+ Add set' }).click(); // re-renders the wheels onto the typed values
     // Turn the weight wheel one row down (2.5 kg rows; 14 sits on the 15 row), then step back with ↓.
     const weight = hammer.locator('.num-wheel', { has: page.getByLabel('Hammer Curl set 1 weight (kg)') });
     await weight.hover();
@@ -180,20 +181,39 @@ test.describe('GymFree end-to-end', () => {
     }
     await page.getByLabel('Hammer Curl set 1 weight (kg)').press('ArrowDown');
     await expect(page.getByLabel('Hammer Curl set 1 weight (kg)')).toHaveValue('15');
-    await hammer.getByRole('button', { name: '+ Add set' }).click();
     await page.getByLabel('Hammer Curl set 2 reps').fill('10');
     await page.getByRole('button', { name: 'Save workout' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Progress', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible();
     await expect(page.getByRole('status')).toContainText('Workout saved');
-    await expect(page.locator('.history li')).toHaveCount(1);
-    await expect(page.locator('.history li')).toContainText('1 exercises');
+    await expect(page.locator('a.history-row')).toHaveCount(1);
+    await expect(page.locator('a.history-row')).toContainText('Chest & Arms');
+    await expect(page.locator('a.history-row')).toContainText('1 ex');
+    await page.getByRole('link', { name: 'Stats' }).click();
     await page.getByLabel('Exercise to chart').selectOption('hammer-curl');
-    await expect(page.locator('.chart-wrap figcaption').first()).toContainText('kg (est. 1RM)');
+    await expect(page.getByText(/Hammer Curl.*est\. 1RM/)).toBeVisible();
 
     await page.getByLabel(/^Weight \(kg\)/).fill('73.5');
     await page.getByRole('button', { name: 'Add' }).click();
     await expect(page.getByText(/Latest 73.5 kg/)).toBeVisible();
+  });
+
+  test('edit a past workout: change the reps, save, and see the new value', async ({ page }) => {
+    await start(page);
+    await onboard(page);
+    await page.goto('./#/log/free');
+    await page.getByLabel('Add exercise').selectOption('push-up');
+    await page.getByLabel('Push-up set 1 reps').fill('12');
+    await page.getByRole('button', { name: 'Save workout' }).click();
+    await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible();
+    await page.locator('a.history-row').first().click();
+    await expect(page.locator('.detail-exercise')).toContainText('12');
+    await page.getByRole('link', { name: 'Edit' }).click();
+    await page.getByLabel('Push-up set 1 reps').fill('20');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('status')).toContainText('Workout updated');
+    await expect(page.locator('.detail-exercise')).toContainText('20');
+    await expect(page.locator('.detail-exercise')).not.toContainText('12');
   });
 
   test('controls follow the app theme (no stock dropdowns in setup)', async ({ page }) => {
@@ -219,7 +239,7 @@ test.describe('GymFree end-to-end', () => {
     await start(page);
     await onboard(page);
     expect(await (await request.get('sw.js')).text()).not.toContain('exercises/library/close-grip');
-    await (await mainNav(page)).getByRole('link', { name: 'Exercises' }).click();
+    await mainNav(page).getByRole('link', { name: 'Exercises' }).click();
     await page.getByText('only my equipment').click();
     const cards = page.locator('.exercise-card');
     await expect(cards).toHaveCount(24);
@@ -237,7 +257,7 @@ test.describe('GymFree end-to-end', () => {
   test('exercise library shows animations and still images', async ({ page }) => {
     await start(page);
     await onboard(page);
-    await (await mainNav(page)).getByRole('link', { name: 'Exercises' }).click();
+    await mainNav(page).getByRole('link', { name: 'Exercises' }).click();
     await page.getByLabel('Muscle group').selectOption('legs');
     await page.getByPlaceholder('Search exercises').fill('squat');
     await expect(page.locator('.exercise-card').first()).toBeVisible();
@@ -275,7 +295,7 @@ test.describe('GymFree end-to-end', () => {
   test('settings: backup round-trip and delete data', async ({ page }) => {
     await start(page);
     await onboard(page);
-    await (await mainNav(page)).getByRole('link', { name: 'Settings' }).click();
+    await openSettings(page);
 
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Download backup' }).click();
@@ -306,8 +326,8 @@ test.describe('GymFree end-to-end', () => {
     test.skip(testInfo.project.name !== 'mobile', 'touch only');
     await start(page);
     await onboard(page);
-    await page.goto('./#/log');
-    await page.locator('.link-card').first().click();
+    await page.goto('./#/log/free');
+    await page.getByLabel('Add exercise').selectOption('push-up');
     const reps = page.locator('.log-entry .num-wheel').first();
     await reps.scrollIntoViewIfNeeded();
     await expect(reps.locator('input')).toHaveValue('');
@@ -328,15 +348,43 @@ test.describe('GymFree end-to-end', () => {
     expect(await page.evaluate(() => window.scrollY)).toBe(scrollY);
   });
 
-  test('header fits the screen: no sideways scrolling, menu reachable', async ({ page }) => {
+  test('bottom bar fits at 360px: no sideways scroll, each tab reachable', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
     await start(page);
     await onboard(page);
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-    expect(overflow).toBeLessThanOrEqual(0);
-    const nav = await mainNav(page);
-    await expect(nav.getByRole('link', { name: 'Settings' })).toBeVisible();
-    await nav.getByRole('link', { name: 'Progress' }).click();
-    await expect(page.getByRole('heading', { name: 'Progress', exact: true })).toBeVisible();
+    const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(await overflow()).toBeLessThanOrEqual(0);
+    const nav = mainNav(page);
+    await expect(nav).toBeVisible();
+    const bar = (await nav.boundingBox())!;
+    expect(bar.y + bar.height).toBeLessThanOrEqual(740);
+    expect(bar.width).toBeLessThanOrEqual(360);
+    for (const [name, heading] of [['History', 'History'], ['Plan', 'My weekly plan'], ['Exercises', 'Exercise library'], ['Home', 'Hi, Riley']] as const) {
+      const link = nav.getByRole('link', { name });
+      await expect(link).toBeVisible();
+      expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await link.click();
+      await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+      await expect(link).toHaveAttribute('aria-current', 'page');
+      expect(await overflow()).toBeLessThanOrEqual(0);
+    }
+    await page.getByRole('link', { name: 'Settings' }).click();
+    await expect(page.getByText('Your data is stored on this device only.')).toBeVisible();
+  });
+
+  test('sidebar shows at 1280px with Settings pinned inside it', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await start(page);
+    await onboard(page);
+    const nav = mainNav(page);
+    const box = (await nav.boundingBox())!;
+    expect(box.x).toBe(0);
+    expect(box.width).toBeLessThan(300);
+    expect(box.height).toBeGreaterThanOrEqual(780);
+    for (const name of ['Home', 'History', 'Plan', 'Exercises', 'Settings']) await expect(nav.getByRole('link', { name })).toBeVisible();
+    await nav.getByRole('link', { name: 'History' }).click();
+    await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   });
 
   test("never stuck on 'Loading…' when the app's files are missing (stale page after a deploy)", async ({ page }) => {

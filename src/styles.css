@@ -62,8 +62,8 @@
 body { margin: 0; background: var(--bg); color: var(--text); }
 a { color: var(--accent); }
 h1 { font-size: 1.6rem; margin: 0.5rem 0; font-weight: var(--font-heavy); letter-spacing: -0.03em; }
-h2 { font-size: 1.15rem; margin: 0 0 0.5rem; }
-h3 { font-size: 1rem; margin: 0 0 0.5rem; }
+h2 { font-size: 1.15rem; margin: 0 0 0.5rem; font-weight: var(--font-heavy); letter-spacing: -0.03em; }
+h3 { font-size: 1rem; margin: 0 0 0.5rem; font-weight: 700; letter-spacing: -0.02em; }
 .container { max-width: 960px; margin: 0 auto; padding: 1rem; }
 .center { min-height: 100vh; display: grid; place-content: center; padding: 1rem; }
 .center-text { text-align: center; }
@@ -72,7 +72,7 @@ h3 { font-size: 1rem; margin: 0 0 0.5rem; }
 .error { color: var(--danger); min-height: 1em; margin: 0.25rem 0; }
 .success { color: var(--accent); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin: 0.75rem 0; }
+.card { background: var(--surface); border: 1px solid transparent; border-radius: 16px; padding: 1rem; margin: 0.75rem 0; }
 .card.highlight { border-color: var(--accent); }
 .note { background: var(--accent-soft); border-color: transparent; }
 .stack > * { margin: 0.75rem 0; }
@@ -116,7 +116,7 @@ input[type='number']::-webkit-inner-spin-button, input[type='number']::-webkit-o
 .num-wheel-row.on { color: var(--accent); font-weight: 800; font-size: 1.1rem; }
 .num-wheel.empty .num-wheel-row.on { color: var(--muted); font-weight: 600; }
 /* The real field sits on the middle row, invisible until tapped (then it covers the row). */
-.num-wheel input {
+.num-wheel input { min-height: 0;
   position: absolute; left: 4px; right: 4px; top: 34px; width: auto; height: 34px; padding: 0; border: none; border-radius: 8px;
   background: transparent; color: transparent; caret-color: transparent; text-align: center; font-weight: 800;
   font-variant-numeric: tabular-nums; pointer-events: none;
@@ -158,6 +158,7 @@ legend { font-weight: 600; margin-bottom: 0.35rem; }
   text-decoration: none; color: var(--muted); font-size: 0.75rem; font-weight: 600;
 }
 .appnav .nav-item[aria-current='page'] { color: var(--accent); }
+.appnav .nav-item:focus-visible, .appnav .nav-settings:focus-visible { outline: 3px solid var(--accent); outline-offset: -2px; border-radius: var(--radius); }
 .brand { font-weight: var(--font-heavy); letter-spacing: -0.03em; text-decoration: none; color: var(--accent); }
 .home-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
 .home-head p { margin: 0 0 0.5rem; }
@@ -237,6 +238,7 @@ th, td { text-align: left; padding: 0.35rem; border-bottom: 1px solid var(--bord
 
 .toast { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%) translateY(150%); background: var(--text); color: var(--bg); padding: 0.6rem 1rem; border-radius: 1.25rem; width: max-content; max-width: min(28rem, calc(100vw - 2rem)); text-align: center; text-wrap: balance; transition: transform 0.25s, opacity 0.25s, visibility 0.25s; z-index: 10; pointer-events: none; opacity: 0; visibility: hidden; }
 .toast button.link { pointer-events: auto; color: inherit; font-weight: 600; }
+@media (max-width: 767px) { .toast { bottom: calc(56px + env(safe-area-inset-bottom) + 0.5rem); } }
 .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; visibility: visible; }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
 
@@ -624,3 +626,89 @@ body:has(.reel) .toast.show { transform: translateX(-50%) translateY(0); }
 .reel-page[data-mode='rest'] .reel-rest-adjust { visibility: visible; }
 .reel-rest-btn { padding: 0.3rem 0.8rem; border-radius: 999px; border: 1px solid var(--border); background: var(--accent-soft); color: var(--text); font-size: 0.85rem; font-weight: 600; touch-action: manipulation; }
 .chart .bar { height: auto; background: none; fill: var(--accent); }
+
+/* ---------- Restyle: buttons, inputs, choices (not in workout mode, which keeps its own look) ---------- */
+:where(body:not(:has(.reel))) input, :where(body:not(:has(.reel))) select, :where(body:not(:has(.reel))) textarea, :where(body:not(:has(.reel))) button, :where(body:not(:has(.reel))) .button { border-radius: 12px; min-height: 44px; }
+:where(body:not(:has(.reel))) input, :where(body:not(:has(.reel))) select, :where(body:not(:has(.reel))) textarea { background-color: var(--surface-2); border-color: transparent; }
+:where(body:not(:has(.reel))) select { background-color: var(--surface-2); }
+:where(body:not(:has(.reel))) select:hover { background-color: var(--accent-soft); }
+:where(body:not(:has(.reel))) input[type='checkbox']:not(.visually-hidden) { min-height: 0; background-color: var(--surface-2); border-color: var(--muted); }
+:where(body:not(:has(.reel))) input[type='checkbox']:not(.visually-hidden):checked { background-color: var(--accent); border-color: var(--accent); }
+:where(body:not(:has(.reel))) button, :where(body:not(:has(.reel))) .button { font-weight: 700; padding: 0.6rem 1.1rem; justify-content: center; align-items: center; }
+:where(body:not(:has(.reel))) button.primary, :where(body:not(:has(.reel))) .button.primary { font-weight: 800; }
+:where(body:not(:has(.reel))) button.secondary, :where(body:not(:has(.reel))) .button.secondary { background: var(--surface-2); color: var(--text); }
+:where(body:not(:has(.reel))) button.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+:where(body:not(:has(.reel))) button.link, :where(body:not(:has(.reel))) button.icon { background: none; border-color: transparent; }
+:where(body:not(:has(.reel))) button.link { padding: 0.25rem 0.5rem; font-weight: 600; text-decoration: underline; color: var(--accent); }
+:where(body:not(:has(.reel))) button.link.danger, :where(body:not(:has(.reel))) button.icon.danger { color: var(--danger); border-color: transparent; }
+:where(body:not(:has(.reel))) button.icon { min-width: 44px; padding: 0.25rem 0.5rem; }
+:where(body:not(:has(.reel))) .toast button.link { min-height: 0; color: inherit; }
+:where(body:not(:has(.reel))) .num-wheel { border-radius: 14px; border-color: transparent; background: var(--surface-2); min-height: 0; }
+:where(body:not(:has(.reel))) .choice { border-width: 2px; border-color: transparent; background: var(--surface); border-radius: 16px; }
+:where(body:not(:has(.reel))) .choice:has(input:checked) { border-color: var(--accent); }
+:where(body:not(:has(.reel))) .chip { border-color: transparent; background: var(--surface-2); min-height: 44px; }
+:where(body:not(:has(.reel))) .chip:has(input:checked) { background: var(--accent); color: var(--accent-text); }
+:where(body:not(:has(.reel))) span.chip, :where(body:not(:has(.reel))) .chips span.chip { cursor: default; min-height: 0; padding: 0.35rem 0.8rem; }
+:where(body:not(:has(.reel))) .chip:hover { border-color: transparent; }
+:where(body:not(:has(.reel))) .steps li { border-color: transparent; background: var(--surface); }
+:where(body:not(:has(.reel))) .steps li.current { background: var(--accent); color: var(--accent-text); font-weight: 800; }
+legend { font-weight: 800; letter-spacing: -0.02em; }
+.actions a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; text-decoration: none; }
+.exercise-card:hover, .num-wheel:hover { border-color: var(--accent); }
+.exercise-list > li { border-top-color: var(--border); }
+th, td { border-bottom-color: var(--border); }
+.preview-card, .feature { border-color: transparent; }
+.log-clock { border-color: transparent; }
+.log-clock.running { border-color: var(--accent); }
+.demo-large .figure-demo, .wheel-demo .figure-demo { border-color: transparent; }
+.not-found h1, .hero h1 { font-weight: var(--font-heavy); letter-spacing: -0.03em; }
+.log-clock-time { font-weight: var(--font-heavy); letter-spacing: -0.03em; }
+.page-head h1, main > h1 { margin-top: 0.25rem; }
+.day-title { font-weight: 600; }
+.badge { font-weight: 800; }
+
+/* History: Workouts | Stats switch, week headings, rows */
+.segmented { display: flex; gap: 0.25rem; padding: 4px; margin: 0.75rem 0; background: var(--surface); border-radius: 14px; }
+.segmented a { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 11px; text-decoration: none; color: var(--muted); font-weight: 600; }
+.segmented a[aria-current='page'] { background: var(--accent); color: var(--accent-text); font-weight: 800; }
+.segmented a:focus-visible { outline-offset: -2px; }
+.history-week { margin: 1.25rem 0 0.5rem; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.history-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.history-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.1rem 0.75rem; min-height: 56px; padding: 0.7rem 1rem; background: var(--surface); border-radius: 14px; color: var(--text); text-decoration: none; }
+.history-row:hover { background: var(--surface-2); }
+.history-row strong { flex: 1 1 100%; font-size: 1.05rem; font-weight: var(--font-heavy); letter-spacing: -0.02em; }
+.history-row span:last-child { margin-left: auto; color: var(--accent); font-weight: 800; }
+.empty { padding: 1rem 0; }
+
+/* Workout detail */
+.detail-meta { margin: 0 0 0.75rem; }
+.chips { margin: 0.5rem 0 1rem; }
+.detail-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.detail-exercise { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.75rem 1rem; background: var(--surface); border-radius: 14px; }
+.detail-exercise strong { font-weight: 800; letter-spacing: -0.02em; }
+.detail-exercise span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.detail-notes { margin: 1rem 0; padding: 0.75rem 1rem; background: var(--accent-soft); border-radius: 14px; }
+
+/* Edit form + set editor */
+form.container > .actions:first-child { justify-content: space-between; align-items: center; margin-top: 0; }
+.set-groups > * { margin: 0.75rem 0; }
+.set-group h2 { font-size: 1.2rem; margin: 0; }
+.set-group .set-head p { margin: 0.1rem 0 0; }
+.set-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
+.set-head .info { font-size: 1.25rem; color: var(--accent); flex: none; }
+.set-cols, .set-row { display: grid; grid-template-columns: 2rem minmax(0, 1fr) 1.25rem minmax(0, 1fr) 44px; align-items: center; gap: 0.25rem; }
+.set-cols { margin-top: 0.75rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; text-align: center; }
+.set-cols span:nth-child(1) { grid-column: 1; }
+.set-cols span:nth-child(2) { grid-column: 2; }
+.set-cols span:nth-child(3) { grid-column: 4; }
+.set-row { margin: 0.35rem 0; }
+.set-index { font-weight: 800; color: var(--muted); text-align: center; }
+.set-x { text-align: center; color: var(--muted); }
+.set-wheel { display: flex; justify-content: center; }
+.set-wheel .num-wheel { width: 100%; max-width: 8rem; }
+.set-row button.icon { grid-column: 5; }
+.set-group .how-to { max-width: none; }
+
+/* Stats chart bars */
+.chart.bars .bar { height: auto; background: none; fill: var(--accent); }
+.chart.bars { max-width: 100%; }

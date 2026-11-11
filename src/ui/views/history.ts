@@ -27,15 +27,15 @@ function dateText(iso: string): string {
 
 /** The History page: a list of workouts by week, or the Stats tab. */
 export function renderHistory(ctx: ViewContext, view: 'workouts' | 'stats'): HTMLElement {
-  const tab = (href: string, label: string, selected: boolean) =>
-    h('a', { href, role: 'tab', 'aria-selected': String(selected) }, label);
+  const tab = (href: string, label: string, current: boolean) =>
+    h('a', current ? { href, 'aria-current': 'page' } : { href }, label);
   return h(
     'main',
     { class: 'container' },
     h('h1', {}, 'History'),
     h(
-      'div',
-      { class: 'segmented', role: 'tablist' },
+      'nav',
+      { class: 'segmented', 'aria-label': 'History view' },
       tab('#/history', 'Workouts', view === 'workouts'),
       tab('#/history?view=stats', 'Stats', view === 'stats'),
     ),
@@ -189,9 +189,10 @@ export function renderWorkoutEdit(ctx: ViewContext, id: string): HTMLElement {
       durationMin: duration.value !== '' ? Math.round(clampNumber(duration.value, 0, 600, 0)) : null,
       notes: cleanText(notes.value, MAX_NOTES),
     };
-    await ctx.update((s) => saveWorkout(s, log, new Date().toISOString(), true, () => randomId(8)), { render: false });
+    let savedId = w.id;
+    await ctx.update((s) => saveWorkout(s, log, new Date().toISOString(), true, () => (savedId = randomId(8))), { render: false });
     ctx.toast('Workout updated.');
-    ctx.navigate(back.slice(1));
+    ctx.navigate(`/history/${encodeURIComponent(savedId)}`);
   });
   return h('main', {}, form);
 }
