@@ -435,7 +435,7 @@ describe('workout logging', () => {
     expect(root.querySelector('h1')?.textContent).toBe(`${day.weekday === null ? 'Any day' : WEEKDAY_NAMES[day.weekday]}${day.name}`);
     const entries = root.querySelectorAll('.log-entry');
     expect(entries).toHaveLength(day.exercises.length);
-    for (const entry of entries) expect(entry.querySelectorAll('tbody tr')).toHaveLength(1);
+    for (const entry of entries) expect(entry.querySelectorAll('.set-row')).toHaveLength(1);
     const first = entries[0];
     const reps = first.querySelector<HTMLInputElement>('input[aria-label$="set 1 reps"]')!;
     expect(reps.value).toBe('');
@@ -446,14 +446,15 @@ describe('workout logging', () => {
 
   it('shows how to do each exercise inside the log', async () => {
     await go(app, `/log/${state().plan[0].id}`);
-    const details = root.querySelector<HTMLDetailsElement>('.how-to-toggle')!;
-    expect(details.querySelector('summary')?.textContent).toBe('How to do it');
-    details.open = true;
-    details.dispatchEvent(new Event('toggle'));
-    expect(details.querySelector('.demo')).not.toBeNull();
-    expect(details.querySelectorAll('ol li').length).toBeGreaterThan(1);
-    details.dispatchEvent(new Event('toggle'));
-    expect(details.querySelectorAll('ol')).toHaveLength(1);
+    const first = root.querySelector('.log-entry')!;
+    const info = first.querySelector<HTMLButtonElement>('button[aria-label^="How to do"]')!;
+    expect(first.querySelector('.how-to')!.childElementCount).toBe(0);
+    info.click();
+    expect(first.querySelector('.how-to .demo')).not.toBeNull();
+    expect(first.querySelectorAll('.how-to ol li').length).toBeGreaterThan(1);
+    info.click();
+    info.click();
+    expect(first.querySelectorAll('.how-to ol')).toHaveLength(1);
   });
 
   it('logs only the sets the user filled in', async () => {
@@ -465,7 +466,7 @@ describe('workout logging', () => {
     change(first.querySelector<HTMLInputElement>(`input[aria-label="${name} set 1 weight (kg)"]`)!, '22.5');
     byText(first as HTMLElement, 'button', '+ Add set').click();
     const again = root.querySelector('.log-entry')!;
-    expect(again.querySelectorAll('tbody tr')).toHaveLength(2);
+    expect(again.querySelectorAll('.set-row')).toHaveLength(2);
     expect(again.querySelector<HTMLInputElement>(`input[aria-label="${name} set 2 reps"]`)!.value).toBe('8');
     change(again.querySelector<HTMLInputElement>(`input[aria-label="${name} set 2 reps"]`)!, '6');
     change(again.querySelector<HTMLInputElement>(`input[aria-label="${name} set 2 weight (kg)"]`)!, '');
@@ -475,7 +476,7 @@ describe('workout logging', () => {
     expect(root.querySelectorAll('.log-entry')).toHaveLength(day.exercises.length - 1);
     change(root.querySelector<HTMLSelectElement>('select[aria-label="Add exercise"]')!, 'plank');
     change(root.querySelector<HTMLSelectElement>('select[aria-label="Add exercise"]')!, 'not-real');
-    expect(root.querySelectorAll('.log-entry')[day.exercises.length - 1].querySelector('th:nth-child(2)')?.textContent).toBe('Seconds');
+    expect(root.querySelectorAll('.log-entry')[day.exercises.length - 1].querySelector('.set-cols span:nth-child(2)')?.textContent).toBe('Seconds');
     change(root.querySelector<HTMLInputElement>('input[aria-label="Plank set 1 seconds"]')!, '45');
     change(root.querySelector<HTMLInputElement>('input[aria-label="Plank set 1 seconds"]')!, '');
     change(root.querySelector<HTMLInputElement>('#log-duration')!, '50');
