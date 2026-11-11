@@ -61,9 +61,9 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); }
 a { color: var(--accent); }
-h1 { font-size: 1.6rem; margin: 0.5rem 0; font-weight: var(--font-heavy); letter-spacing: -0.03em; }
-h2 { font-size: 1.15rem; margin: 0 0 0.5rem; font-weight: var(--font-heavy); letter-spacing: -0.03em; }
-h3 { font-size: 1rem; margin: 0 0 0.5rem; font-weight: 700; letter-spacing: -0.02em; }
+h1 { font-size: 1.6rem; margin: 0.5rem 0; }
+h2 { font-size: 1.15rem; margin: 0 0 0.5rem; }
+h3 { font-size: 1rem; margin: 0 0 0.5rem; }
 .container { max-width: 960px; margin: 0 auto; padding: 1rem; }
 .center { min-height: 100vh; display: grid; place-content: center; padding: 1rem; }
 .center-text { text-align: center; }
@@ -72,7 +72,7 @@ h3 { font-size: 1rem; margin: 0 0 0.5rem; font-weight: 700; letter-spacing: -0.0
 .error { color: var(--danger); min-height: 1em; margin: 0.25rem 0; }
 .success { color: var(--accent); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.card { background: var(--surface); border: 1px solid transparent; border-radius: 16px; padding: 1rem; margin: 0.75rem 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin: 0.75rem 0; }
 .card.highlight { border-color: var(--accent); }
 .note { background: var(--accent-soft); border-color: transparent; }
 .stack > * { margin: 0.75rem 0; }
@@ -116,7 +116,8 @@ input[type='number']::-webkit-inner-spin-button, input[type='number']::-webkit-o
 .num-wheel-row.on { color: var(--accent); font-weight: 800; font-size: 1.1rem; }
 .num-wheel.empty .num-wheel-row.on { color: var(--muted); font-weight: 600; }
 /* The real field sits on the middle row, invisible until tapped (then it covers the row). */
-.num-wheel input { min-height: 0;
+.num-wheel input {
+  min-height: 0;
   position: absolute; left: 4px; right: 4px; top: 34px; width: auto; height: 34px; padding: 0; border: none; border-radius: 8px;
   background: transparent; color: transparent; caret-color: transparent; text-align: center; font-weight: 800;
   font-variant-numeric: tabular-nums; pointer-events: none;
@@ -652,11 +653,14 @@ body:has(.reel) .toast.show { transform: translateX(-50%) translateY(0); }
 :where(body:not(:has(.reel))) .chip:hover { border-color: transparent; }
 :where(body:not(:has(.reel))) .steps li { border-color: transparent; background: var(--surface); }
 :where(body:not(:has(.reel))) .steps li.current { background: var(--accent); color: var(--accent-text); font-weight: 800; }
-legend { font-weight: 800; letter-spacing: -0.02em; }
-.actions a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; text-decoration: none; }
+:where(body:not(:has(.reel))) h1, :where(body:not(:has(.reel))) h2 { font-weight: var(--font-heavy); letter-spacing: -0.03em; }
+:where(body:not(:has(.reel))) h3 { font-weight: 700; letter-spacing: -0.02em; }
+:where(body:not(:has(.reel))) .card { border-color: transparent; border-radius: 16px; }
+:where(body:not(:has(.reel))) .card.highlight { border-color: var(--accent); }
+:where(body:not(:has(.reel))) legend { font-weight: 800; letter-spacing: -0.02em; }
+:where(body:not(:has(.reel))) .actions a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; text-decoration: none; }
 .exercise-card:hover, .num-wheel:hover { border-color: var(--accent); }
 .exercise-list > li { border-top-color: var(--border); }
-th, td { border-bottom-color: var(--border); }
 .preview-card, .feature { border-color: transparent; }
 .log-clock { border-color: transparent; }
 .log-clock.running { border-color: var(--accent); }
@@ -665,7 +669,7 @@ th, td { border-bottom-color: var(--border); }
 .log-clock-time { font-weight: var(--font-heavy); letter-spacing: -0.03em; }
 .page-head h1, main > h1 { margin-top: 0.25rem; }
 .day-title { font-weight: 600; }
-.badge { font-weight: 800; }
+:where(body:not(:has(.reel))) .badge { font-weight: 800; }
 
 /* History: Workouts | Stats switch, week headings, rows */
 .segmented { display: flex; gap: 0.25rem; padding: 4px; margin: 0.75rem 0; background: var(--surface); border-radius: 14px; }

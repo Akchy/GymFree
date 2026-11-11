@@ -56,3 +56,22 @@ describe('theme contrast', () => {
     expect(token(forced, '--surface')).toBe('#181c21');
   });
 });
+
+describe('workout mode keeps its type', () => {
+  // Unguarded rules on bare elements/shared classes apply inside .reel; the redesign's heading/type changes must use the
+  // :where(body:not(:has(.reel))) guard, so these rules must stay exactly as they were before the redesign (commit 3d562d0).
+  const rule = (sel: string) => css.match(new RegExp(`^${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`, 'm'))?.[1] ?? '';
+  it.each(['h1', 'h2', 'h3', 'legend', '.badge', '.card', '.actions'])('unguarded %s sets no heavier weight or tighter tracking', (sel) => {
+    const body = rule(sel);
+    expect(body).not.toMatch(/letter-spacing/);
+    expect(body).not.toMatch(/font-weight:\s*(var\(--font-heavy\)|800)/);
+  });
+  it('h1-h3 bare rules are the pre-redesign ones', () => {
+    expect(rule('h1')).toBe(' font-size: 1.6rem; margin: 0.5rem 0; ');
+    expect(rule('h2')).toBe(' font-size: 1.15rem; margin: 0 0 0.5rem; ');
+    expect(rule('h3')).toBe(' font-size: 1rem; margin: 0 0 0.5rem; ');
+  });
+  it('heading restyle is guarded', () => {
+    expect(css).toContain(':where(body:not(:has(.reel))) h2');
+  });
+});
