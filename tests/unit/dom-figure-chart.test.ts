@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { chartGeometry, lineChart } from '../../src/ui/chart';
+import { barChart, chartGeometry, lineChart } from '../../src/ui/chart';
 import { append, clear, field, h, select, svg, titleCase } from '../../src/ui/dom';
 import { effectiveTheme, getTheme, setTheme, THEME_KEY } from '../../src/ui/theme';
 import { prefersReducedMotion, renderFigure } from '../../src/ui/figure';
@@ -142,5 +142,27 @@ describe('theme', () => {
     localStorage.setItem(THEME_KEY, 'neon');
     expect(getTheme()).toBe('system');
     localStorage.removeItem(THEME_KEY);
+  });
+});
+
+describe('barChart', () => {
+  const series = [
+    { date: '2026-10-01', value: 20 },
+    { date: '2026-10-08', value: 40 },
+    { date: '2026-10-15', value: 30 },
+  ];
+  it('draws one bar per point from zero, tallest for the max', () => {
+    const el = barChart(series, 'Volume', ' kg');
+    const bars = [...el.querySelectorAll('rect.bar')];
+    expect(bars).toHaveLength(3);
+    const heights = bars.map((b) => Number(b.getAttribute('height')));
+    expect(heights.indexOf(Math.max(...heights))).toBe(1);
+    expect(heights[0]).toBeCloseTo(heights[1] / 2, 1);
+    expect(bars[1].querySelector('title')?.textContent).toBe('2026-10-08: 40 kg');
+    expect(el.querySelector('svg.chart.bars')?.getAttribute('aria-label')).toBe('Volume');
+    expect(el.querySelector('figcaption')?.textContent).toBe('Last: 30 kg · Best: 40 kg');
+  });
+  it('shows an empty state', () => {
+    expect(barChart([], 'x').textContent).toBe('No data yet.');
   });
 });

@@ -73,6 +73,28 @@ export function exerciseSeries(workouts: readonly WorkoutLog[], exerciseId: stri
   return points;
 }
 
+export type VolumeUnit = 'kg' | 'reps' | 's';
+
+/**
+ * Total work per session for one exercise: seconds if timed, kg lifted (reps x kg) if the exercise
+ * was ever logged with weight, otherwise reps. In a weighted series, bodyweight-only sets
+ * contribute 0 (mixed-weight call: the unit must stay consistent across the series).
+ */
+export function sessionVolumeSeries(workouts: readonly WorkoutLog[], exerciseId: string): { unit: VolumeUnit; points: SeriesPoint[] } {
+  const timed = isTimed(getExercise(exerciseId));
+  const sorted = [...workouts].sort((a, b) => a.date.localeCompare(b.date));
+  const weighted = !timed && sorted.some((w) => w.entries.some((e) => e.exerciseId === exerciseId && e.sets.some((s) => s.weightKg > 0)));
+  const unit: VolumeUnit = timed ? 's' : weighted ? 'kg' : 'reps';
+  const points: SeriesPoint[] = [];
+  for (const w of sorted) {
+    const sets = w.entries.filter((e) => e.exerciseId === exerciseId).flatMap((e) => e.sets);
+    if (!sets.length) continue;
+    const value = sets.reduce((sum, s) => sum + (weighted ? s.reps * s.weightKg : s.reps), 0);
+    points.push({ date: w.date, value: Math.round(value * 10) / 10 });
+  }
+  return { unit, points };
+}
+
 /**
  * Time spent working in a workout (rests left out): the sum of its set times. A timed
  * exercise typed in by hand still counts, since its amount is seconds. Null if no set was timed.

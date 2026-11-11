@@ -52,3 +52,33 @@ export function lineChart(series: readonly SeriesPoint[], label: string, unit = 
     h('figcaption', { class: 'muted' }, `${first.date}: ${first.value}${unit} → ${last.date}: ${last.value}${unit}`),
   );
 }
+
+/** Bar chart of a series, bars rising from zero. */
+export function barChart(series: readonly SeriesPoint[], label: string, unit = ''): HTMLElement {
+  if (!series.length) return h('p', { class: 'muted' }, 'No data yet.');
+  const width = 320;
+  const height = 160;
+  const pad = 24;
+  const max = Math.max(...series.map((p) => p.value), 1);
+  const slot = (width - 2 * pad) / series.length;
+  const barW = Math.min(32, slot * 0.7);
+  const root = svg('svg', { viewBox: `0 0 ${width} ${height}`, class: 'chart bars', role: 'img', 'aria-label': label });
+  root.appendChild(svg('line', { class: 'axis', x1: pad, y1: height - pad, x2: width - pad, y2: height - pad }));
+  series.forEach((p, i) => {
+    const barH = Math.round((p.value / max) * (height - 2 * pad) * 10) / 10;
+    const r = svg('rect', {
+      class: 'bar',
+      x: Math.round((pad + i * slot + (slot - barW) / 2) * 10) / 10,
+      y: Math.round((height - pad - barH) * 10) / 10,
+      width: Math.round(barW * 10) / 10,
+      height: barH,
+      rx: 3,
+    });
+    const t = svg('title');
+    t.textContent = `${p.date}: ${p.value}${unit}`;
+    r.appendChild(t);
+    root.appendChild(r);
+  });
+  const last = series[series.length - 1];
+  return h('figure', { class: 'chart-wrap' }, root, h('figcaption', { class: 'muted' }, `Last: ${last.value}${unit} · Best: ${Math.max(...series.map((p) => p.value))}${unit}`));
+}

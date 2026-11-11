@@ -7,6 +7,7 @@ import {
   muscleGroupCounts,
   personalRecords,
   secondsPerRepSeries,
+  sessionVolumeSeries,
   totalReps,
   workingSeconds,
   weekStreak,
@@ -133,5 +134,28 @@ describe('weightChange', () => {
       changeKg: -0.6,
     });
     expect(weightChange([])).toBeNull();
+  });
+});
+
+describe('sessionVolumeSeries', () => {
+  it('sums reps x kg for weighted exercises', () => {
+    const logs = [w('a', '2026-10-05', [{ exerciseId: 'bench-press', sets: [{ reps: 10, weightKg: 40 }, { reps: 10, weightKg: 40 }, { reps: 10, weightKg: 40 }] }])];
+    expect(sessionVolumeSeries(logs, 'bench-press')).toEqual({ unit: 'kg', points: [{ date: '2026-10-05', value: 1200 }] });
+  });
+  it('sums reps for bodyweight exercises', () => {
+    const logs = [w('a', '2026-10-05', [{ exerciseId: 'push-up', sets: [{ reps: 15, weightKg: 0 }, { reps: 12, weightKg: 0 }] }])];
+    expect(sessionVolumeSeries(logs, 'push-up')).toEqual({ unit: 'reps', points: [{ date: '2026-10-05', value: 27 }] });
+  });
+  it('sums seconds for timed exercises', () => {
+    const logs = [w('a', '2026-10-05', [{ exerciseId: 'plank', sets: [{ reps: 60, weightKg: 0 }, { reps: 45, weightKg: 0 }] }])];
+    expect(sessionVolumeSeries(logs, 'plank')).toEqual({ unit: 's', points: [{ date: '2026-10-05', value: 105 }] });
+  });
+  it('skips workouts without the exercise and sorts by date', () => {
+    const logs = [
+      w('b', '2026-10-12', [{ exerciseId: 'push-up', sets: [{ reps: 5, weightKg: 0 }] }]),
+      w('c', '2026-10-08', [{ exerciseId: 'plank', sets: [{ reps: 30, weightKg: 0 }] }]),
+      w('a', '2026-10-05', [{ exerciseId: 'push-up', sets: [{ reps: 10, weightKg: 0 }] }]),
+    ];
+    expect(sessionVolumeSeries(logs, 'push-up').points.map((p) => p.date)).toEqual(['2026-10-05', '2026-10-12']);
   });
 });
