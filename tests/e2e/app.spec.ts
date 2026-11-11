@@ -124,8 +124,9 @@ test.describe('GymFree end-to-end', () => {
     await start(page);
     await onboard(page);
     await page.goto('./#/plan');
-    await page.getByRole('link', { name: 'Edit plan' }).click();
-    await expect(page.getByRole('heading', { name: 'Edit your plan' })).toBeVisible();
+    await page.locator('section.plan-view').first().getByRole('link', { name: /^Edit / }).click();
+    await expect(page.getByRole('heading', { name: /^Edit / })).toBeVisible();
+    await expect(page.locator('.plan-day')).toHaveCount(1);
     const firstDay = page.locator('.plan-day').first();
     await firstDay.getByLabel('Day name').fill('Chest & Arms');
     await firstDay.getByLabel('Day name').blur();
@@ -163,9 +164,22 @@ test.describe('GymFree end-to-end', () => {
     await page.getByRole('button', { name: 'Switch to dark theme' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect(page.getByLabel('Hammer Curl set 1 weight (kg)')).toHaveValue('14');
-    await hammer.getByRole('button', { name: 'Increase by 2.5' }).click();
+    // Turn the weight wheel one row down (2.5 kg rows; 14 sits on the 15 row), then step back with ↓.
+    const weight = hammer.locator('.num-wheel', { has: page.getByLabel('Hammer Curl set 1 weight (kg)') });
+    await weight.hover();
+    await page.mouse.wheel(0, 34);
+    await expect(page.getByLabel('Hammer Curl set 1 weight (kg)')).toHaveValue('17.5');
+    await page.waitForTimeout(400); // a tap right after a flick is ignored (it is the flick ending)
+    await weight.locator('.num-wheel-scroll').click({ position: { x: 20, y: 51 } }); // the middle row
+    if (test.info().project.name === 'mobile') {
+      // On a phone the wheel only turns: a tap neither types nor opens the keyboard.
+      await expect(page.getByLabel('Hammer Curl set 1 weight (kg)')).not.toBeFocused();
+      await expect(page.getByLabel('Hammer Curl set 1 weight (kg)')).toHaveAttribute('inputmode', 'none');
+    } else {
+      await expect(page.getByLabel('Hammer Curl set 1 weight (kg)')).toBeFocused();
+    }
+    await page.getByLabel('Hammer Curl set 1 weight (kg)').press('ArrowDown');
     await expect(page.getByLabel('Hammer Curl set 1 weight (kg)')).toHaveValue('15');
-    await hammer.getByRole('button', { name: 'Decrease by 2.5' }).click();
     await hammer.getByRole('button', { name: '+ Add set' }).click();
     await page.getByLabel('Hammer Curl set 2 reps').fill('10');
     await page.getByRole('button', { name: 'Save workout' }).click();
@@ -286,6 +300,32 @@ test.describe('GymFree end-to-end', () => {
     await expect(page.getByRole('heading', { name: 'Hi, Riley' })).toBeVisible();
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Hi, Riley' })).toBeVisible();
+  });
+
+  test('number wheels turn with a finger swipe, without moving the page', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile', 'touch only');
+    await start(page);
+    await onboard(page);
+    await page.goto('./#/log');
+    await page.locator('.link-card').first().click();
+    const reps = page.locator('.log-entry .num-wheel').first();
+    await reps.scrollIntoViewIfNeeded();
+    await expect(reps.locator('input')).toHaveValue('');
+    const box = (await reps.boundingBox())!;
+    const scrollY = await page.evaluate(() => window.scrollY);
+    // A real touch drag (CDP touch events), finger moving up two rows: the values go up.
+    const cdp = await page.context().newCDPSession(page);
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2 + 30;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+    for (let i = 1; i <= 10; i++) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - 7 * i }] });
+      await page.waitForTimeout(16);
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(reps.locator('input')).not.toHaveValue('');
+    expect(Number(await reps.locator('input').inputValue())).toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.scrollY)).toBe(scrollY);
   });
 
   test('header fits the screen: no sideways scrolling, menu reachable', async ({ page }) => {

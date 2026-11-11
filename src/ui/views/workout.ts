@@ -10,7 +10,7 @@ import { randomId } from '../../core/encoding';
 import { clampNumber, cleanText, MAX_NOTES, MAX_TARGET_SECONDS, MAX_WEIGHT_KG } from '../../core/state';
 import type { PlannedExercise, WorkoutLog } from '../../core/types';
 import { fromDisplayWeight, round, toDisplayWeight } from '../../core/units';
-import { amountText, type Exercise, getExercise, isTimed } from '../../data/exercises';
+import { amountText, durationText, type Exercise, getExercise, isTimed } from '../../data/exercises';
 import { photoUrls } from '../../data/photos';
 import type { ViewContext } from '../context';
 import { h, svg } from '../dom';
@@ -26,6 +26,8 @@ type Mode = 'idle' | 'run' | 'pause' | 'rest';
 interface WorkoutSet {
   reps: number;
   weightKg: number;
+  /** How long the set took (logged sets only). */
+  seconds?: number;
 }
 
 interface Card {
@@ -97,7 +99,7 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
     if (!ex) return [];
     const target = targetFor(e.exerciseId);
     // Sets the form left without reps are not logged yet.
-    const sets = e.sets.filter((s) => (s.reps ?? 0) > 0).map((s) => ({ reps: s.reps as number, weightKg: s.weightKg ?? 0 }));
+    const sets = e.sets.filter((s) => (s.reps ?? 0) > 0).map((s): WorkoutSet => (s.seconds ? { reps: s.reps as number, weightKg: s.weightKg ?? 0, seconds: s.seconds } : { reps: s.reps as number, weightKg: s.weightKg ?? 0 }));
     const prev = sets.at(-1);
     const weightKg = prev?.weightKg ?? lastWeight(state.workouts, ex.id);
     // A timed exercise aims for the plan's time, not the length of the last set.
@@ -120,6 +122,8 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
   };
 
   const weightText = (ex: Exercise, kg: number) => (kg === 0 && ex.equipment.includes('bodyweight') ? 'Bodyweight' : `${toDisplayWeight(kg, units)} ${units}`);
+  /** How long a set took; not repeated for a timed exercise, whose amount is already its time. */
+  const timeText = (ex: Exercise, s: WorkoutSet) => (s.seconds && !isTimed(ex) ? durationText(s.seconds) : '');
   const setText = (ex: Exercise, s: WorkoutSet) => `${isTimed(ex) ? amountText(ex, s.reps) : s.reps} × ${s.weightKg === 0 && ex.equipment.includes('bodyweight') ? 'BW' : toDisplayWeight(s.weightKg, units)}`;
   /** One step of the weight buttons: 2.5 kg or 5 lb, snapped to that grid. */
   const stepWeight = (kg: number, dir: -1 | 1) => {
@@ -252,9 +256,9 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
         persist();
       }
     } else if (action === 'stop' && (card.mode === 'run' || card.mode === 'pause')) {
-      // A timed set is as long as the clock says, at least one second.
-      const reps = isTimed(card.ex) ? Math.max(1, Math.round(worked(card) / 1000)) : card.next.reps;
-      card.sets.push({ ...card.next, reps });
+      // Every set keeps how long it took; a timed set's amount is that time, at least a second.
+      const seconds = Math.max(1, Math.round(worked(card) / 1000));
+      card.sets.push({ reps: isTimed(card.ex) ? seconds : card.next.reps, weightKg: card.next.weightKg, seconds });
       card.workedMs = 0;
       card.runningSince = null;
       card.restEndsAt = now() + card.restSec * 1000;
@@ -374,7 +378,13 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
     const n = card.sets.length;
     r.page.dataset.mode = card.mode;
     const chips: HTMLElement[] = card.sets.map((s, k) =>
-      h('button', { type: 'button', class: 'reel-set done', 'data-set': k, 'aria-label': `Edit set ${k + 1}: ${setText(card.ex, s)}` }, `Set ${k + 1} ✎`, h('b', {}, setText(card.ex, s))),
+      h(
+        'button',
+        { type: 'button', class: 'reel-set done', 'data-set': k, 'aria-label': `Edit set ${k + 1}: ${setText(card.ex, s)}${timeText(card.ex, s) ? `, took ${timeText(card.ex, s)}` : ''}` },
+        `Set ${k + 1} ✎`,
+        h('b', {}, setText(card.ex, s)),
+        timeText(card.ex, s) ? h('small', { class: 'reel-set-time' }, `⏱ ${timeText(card.ex, s)}`) : null,
+      ),
     );
     if (card.mode === 'run' || card.mode === 'pause') chips.push(h('div', { class: 'reel-set now' }, `Set ${n + 1}`, h('b', {}, setText(card.ex, card.next))));
     r.sets.replaceChildren(...(chips.length ? chips : [h('span', { class: 'reel-empty' }, 'No sets yet. Tap ▶ to start.')]));

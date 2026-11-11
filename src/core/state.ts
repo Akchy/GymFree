@@ -16,6 +16,7 @@ import {
   type AppState,
   type BodyLog,
   type LoggedExercise,
+  type LoggedSet,
   type PlanDay,
   type PlannedExercise,
   type Weekday,
@@ -130,15 +131,26 @@ function planDay(v: unknown): PlanDay | null {
   };
 }
 
+/** Longest set time kept: an hour. */
+export const MAX_SET_SECONDS = 3600;
+
+/** A set's time in whole seconds (1 to an hour), or null if missing or not a real time. */
+export function setSeconds(v: unknown): number | null {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0.5) return null;
+  return Math.min(MAX_SET_SECONDS, Math.round(v));
+}
+
 function loggedExercise(v: unknown): LoggedExercise | null {
   if (!isObj(v) || typeof v.exerciseId !== 'string' || !getExercise(v.exerciseId)) return null;
   const sets = (Array.isArray(v.sets) ? v.sets : [])
     .slice(0, 20)
     .filter(isObj)
-    .map((s) => ({
-      reps: Math.round(clampNumber(s.reps, 0, 1000, 0)),
-      weightKg: clampNumber(s.weightKg, 0, MAX_WEIGHT_KG, 0),
-    }));
+    .map((s) => {
+      const set: LoggedSet = { reps: Math.round(clampNumber(s.reps, 0, 1000, 0)), weightKg: clampNumber(s.weightKg, 0, MAX_WEIGHT_KG, 0) };
+      const seconds = setSeconds(s.seconds);
+      if (seconds !== null) set.seconds = seconds;
+      return set;
+    });
   return { exerciseId: v.exerciseId, sets };
 }
 

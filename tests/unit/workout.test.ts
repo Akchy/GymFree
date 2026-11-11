@@ -119,6 +119,7 @@ describe('workout mode', () => {
     expect(vibrate).toHaveBeenCalledTimes(1);
     btn(page, /^Stop and log/).click();
     expect(page.querySelector('.reel-set.done')?.textContent).toContain('42 s × BW');
+    expect(page.querySelector('.reel-set-time')).toBeNull();
     // The next set still aims for the goal, not the last set's time
     expect(page.textContent).toContain('Goal 35 s');
     btn(page, /^Edit set 1/).click();
@@ -129,7 +130,8 @@ describe('workout mode', () => {
     byText(sheet, 'button', 'Done').click();
     byText(root.querySelector('.reel-summary')!, 'button', 'Save workout').click();
     await settle(app);
-    expect(state().workouts.at(-1)!.entries).toEqual([{ exerciseId: 'plank', sets: [{ reps: 45, weightKg: 0 }] }]);
+    // Editing the amount leaves the measured time as it was; the time is not shown twice
+    expect(state().workouts.at(-1)!.entries).toEqual([{ exerciseId: 'plank', sets: [{ reps: 45, weightKg: 0, seconds: 42 }] }]);
     vi.useRealTimers();
     delete (navigator as { vibrate?: unknown }).vibrate;
   });
@@ -214,6 +216,9 @@ describe('workout mode', () => {
     await go(app, '/');
     await go(app, `/workout/${day().id}`);
     expect(pages()[0].querySelectorAll('.reel-set.done')).toHaveLength(1);
+    // …and how long it took
+    expect(pages()[0].querySelector('.reel-set-time')?.textContent).toBe('⏱ 40 s');
+    expect(pages()[0].querySelector('.reel-set.done')?.getAttribute('aria-label')).toMatch(/, took 40 s$/);
     // The list view shows the same set and can add one
     await go(app, `/log/${day().id}`);
     const name = getExercise(day().exercises[0].exerciseId)!.name;
@@ -229,7 +234,8 @@ describe('workout mode', () => {
     expect(window.location.hash).toBe('#/progress');
     const log = state().workouts.at(-1)!;
     expect(log).toMatchObject({ date: '2026-10-27', dayId: day().id, durationMin: 21 });
-    expect(log.entries).toEqual([{ exerciseId: day().exercises[0].exerciseId, sets: [{ reps: day().exercises[0].repsMin, weightKg: 0 }, { reps: 3, weightKg: 0 }] }]);
+    // The timed set keeps its time; the set added by hand has none
+    expect(log.entries).toEqual([{ exerciseId: day().exercises[0].exerciseId, sets: [{ reps: day().exercises[0].repsMin, weightKg: 0, seconds: 40 }, { reps: 3, weightKg: 0 }] }]);
     await go(app, `/workout/${day().id}`);
     expect(pages()[0].textContent).toContain('No sets yet');
   });
@@ -294,5 +300,86 @@ describe('workout mode', () => {
     await go(app, '/workout/free');
     await settle(app);
     expect(window.location.hash).toBe('#/log/free');
+  });
+});
+
+describe('workout timer in the list view', () => {
+  const duration = () => root.querySelector<HTMLInputElement>('#log-duration')!;
+  const clockBtn = () => root.querySelector<HTMLButtonElement>('.log-clock button')!;
+  const clockTime = () => root.querySelector('.log-clock-time')?.textContent;
+  const fillFirstSet = () => {
+    const name = getExercise(day().exercises[0].exerciseId)!.name;
+    change(root.querySelector<HTMLInputElement>(`input[aria-label="${name} set 1 reps"]`)!, '8');
+  };
+  const submit = async () => {
+    root.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    await settle(app);
+  };
+
+  it('picks up the time from workout mode: duration filled from it and saved with it', async () => {
+    const id = day().id;
+    await go(app, `/workout/${id}`);
+    doSet(pages()[0], 60);
+    time += 4 * 60_000;
+    await go(app, `/log/${id}`); // leaving workout mode pauses its clock at 5 minutes
+    expect(clockTime()).toBe('05:00');
+    expect(clockBtn().textContent).toBe('Resume');
+    expect(duration().value).toBe('5');
+    expect(root.querySelector('#log-duration-hint')?.textContent).toBe('From the timer');
+    await submit();
+    expect(state().workouts.at(-1)!.durationMin).toBe(5);
+  });
+
+  it('runs a timer here that fills the duration, keeps running when the page is left, and hands over to workout mode', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const id = day().id;
+    await go(app, `/log/${id}`);
+    expect(clockBtn().textContent).toBe('Start timer');
+    expect(duration().value).toBe('');
+    clockBtn().click();
+    expect(clockBtn().textContent).toBe('Pause');
+    time += 12 * 60_000;
+    vi.advanceTimersByTime(1000);
+    expect(clockTime()).toBe('12:00');
+    expect(duration().value).toBe('12');
+    // Away to another page and back: the clock kept going
+    await go(app, '/');
+    time += 10 * 60_000;
+    await go(app, `/log/${id}`);
+    expect(clockTime()).toBe('22:00');
+    expect(clockBtn().textContent).toBe('Pause');
+    // Workout mode carries on from the same clock
+    time += 60_000;
+    await go(app, `/workout/${id}`);
+    expect(root.querySelector('.reel-elapsed')?.textContent).toBe('23:00');
+    vi.useRealTimers();
+  });
+
+  it('keeps a duration set by hand over the timer', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const id = day().id;
+    await go(app, `/log/${id}`);
+    clockBtn().click();
+    change(duration(), '45');
+    time += 20 * 60_000;
+    vi.advanceTimersByTime(1000);
+    expect(duration().value).toBe('45');
+    expect(root.querySelector('#log-duration-hint')?.textContent).toBe('');
+    clockBtn().click(); // pause
+    expect(clockBtn().textContent).toBe('Resume');
+    time += 30 * 60_000; // paused: not counted
+    vi.advanceTimersByTime(1000);
+    expect(clockTime()).toBe('20:00');
+    fillFirstSet();
+    await submit();
+    expect(state().workouts.at(-1)!.durationMin).toBe(45);
+    vi.useRealTimers();
+  });
+
+  it('saves no duration when there is no timer and none was typed', async () => {
+    await go(app, `/log/${day().id}`);
+    fillFirstSet();
+    await submit();
+    expect(state().workouts.at(-1)!.durationMin).toBeNull();
   });
 });

@@ -73,6 +73,49 @@ export function exerciseSeries(workouts: readonly WorkoutLog[], exerciseId: stri
   return points;
 }
 
+/**
+ * Time spent working in a workout (rests left out): the sum of its set times. A timed
+ * exercise typed in by hand still counts, since its amount is seconds. Null if no set was timed.
+ */
+export function workingSeconds(log: WorkoutLog): number | null {
+  let total = 0;
+  let timed = false;
+  for (const e of log.entries) {
+    const byAmount = isTimed(getExercise(e.exerciseId));
+    for (const s of e.sets) {
+      const sec = s.seconds ?? (byAmount ? s.reps : 0);
+      if (sec > 0) {
+        total += sec;
+        timed = true;
+      }
+    }
+  }
+  return timed ? total : null;
+}
+
+/**
+ * Average seconds per rep for one exercise, per workout, from sets timed in workout mode.
+ * Rising means slower reps (more control, or tiring); falling means faster. Not for timed exercises.
+ */
+export function secondsPerRepSeries(workouts: readonly WorkoutLog[], exerciseId: string): SeriesPoint[] {
+  if (isTimed(getExercise(exerciseId))) return [];
+  const points: SeriesPoint[] = [];
+  for (const w of [...workouts].sort((a, b) => a.date.localeCompare(b.date))) {
+    let sec = 0;
+    let reps = 0;
+    for (const e of w.entries) {
+      if (e.exerciseId !== exerciseId) continue;
+      for (const s of e.sets) {
+        if (!s.seconds || s.reps <= 0) continue;
+        sec += s.seconds;
+        reps += s.reps;
+      }
+    }
+    if (reps > 0) points.push({ date: w.date, value: Math.round((sec / reps) * 10) / 10 });
+  }
+  return points;
+}
+
 export function loggedExerciseIds(workouts: readonly WorkoutLog[]): string[] {
   return [...new Set(workouts.flatMap((w) => w.entries.filter((e) => e.sets.length).map((e) => e.exerciseId)))];
 }

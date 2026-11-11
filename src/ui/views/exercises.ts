@@ -56,13 +56,14 @@ export function renderExerciseList(ctx: ViewContext): HTMLElement {
 /** Where the "back" link of the exercise page leads, based on where the user came from. */
 export const BACK_TARGETS: Record<string, readonly [href: string, label: string]> = {
   plan: ['#/plan', '← Back to my plan'],
-  'plan-edit': ['#/plan/edit', '← Back to editing'],
   home: ['#/', '← Back to home'],
   library: ['#/exercises', '← All exercises'],
 };
 
 export function renderExerciseDetail(ctx: ViewContext, id: string, from = 'library'): HTMLElement {
-  const [backHref, backLabel] = BACK_TARGETS[from] ?? BACK_TARGETS.library;
+  // "plan-edit:<dayId>" leads back to that day's editor.
+  const editing = from.startsWith('plan-edit:') ? from.slice('plan-edit:'.length) : null;
+  const [backHref, backLabel] = editing ? [`#/plan/edit/${encodeURIComponent(editing)}`, '← Back to editing'] : (BACK_TARGETS[from] ?? BACK_TARGETS.library);
   const ex = getExercise(id);
   if (!ex) {
     return h('main', { class: 'container' }, h('h1', {}, 'Exercise not found'), h('a', { href: backHref }, backLabel));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { amountText, CORE_EXERCISES, EXERCISES, exerciseDetails, filterExercises, getExercise, isAvailable, isTimed, rangeText } from '../../src/data/exercises';
+import { amountText, durationText, CORE_EXERCISES, EXERCISES, exerciseDetails, filterExercises, getExercise, isAvailable, isTimed, rangeText } from '../../src/data/exercises';
 import { MOTIONS, getMotion, type Pose } from '../../src/data/motions';
 import { EQUIPMENT, MUSCLE_GROUPS } from '../../src/core/types';
 
@@ -17,6 +17,9 @@ describe('timed exercises', () => {
     expect(amountText(plank, 90)).toBe('1:30');
     expect(amountText(plank, 605)).toBe('10:05');
     expect(rangeText(pushUp, 8, 12)).toBe('8–12 reps');
+    expect(durationText(0)).toBe('0 s');
+    expect(durationText(59.6)).toBe('1:00');
+    expect(durationText(3725)).toBe('1:02:05');
     expect(rangeText(plank, 30, 30)).toBe('30 s');
   });
 });

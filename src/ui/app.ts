@@ -18,7 +18,7 @@ import { renderExerciseDetail, renderExerciseList } from './views/exercises';
 import { renderLogForm, renderLogPicker } from './views/log';
 import { renderNotFound } from './views/notfound';
 import { renderOnboarding } from './views/onboarding';
-import { renderPlan, renderPlanEditor } from './views/plan';
+import { renderDayEditor, renderPlan } from './views/plan';
 import { renderProgress } from './views/progress';
 import { renderSettings, syncStatusText } from './views/settings';
 import { renderLinkChoice, renderUnavailable, renderWelcome } from './views/welcome';
@@ -361,7 +361,7 @@ export class App {
     clear(this.mainEl);
     const path = this.route();
     const [pathname, query = ''] = path.split('?');
-    const [, section = '', param = ''] = pathname.split('/');
+    const [, section = '', param = '', sub = ''] = pathname.split('/');
     if (!this.state) {
       this.renderedPath = null;
       this.mainEl.appendChild(SECTIONS.has(section) ? this.renderEntry() : renderNotFound({ path, hasData: false }));
@@ -389,7 +389,8 @@ export class App {
         view = renderOnboarding(ctx);
         break;
       case 'plan':
-        view = param === 'edit' ? renderPlanEditor(ctx) : renderPlan(ctx);
+        if (param === 'edit' && !sub) return this.navigate('/plan');
+        view = param === 'edit' ? renderDayEditor(ctx, decodeURIComponent(sub)) : renderPlan(ctx);
         break;
       case 'exercises':
         view = param ? renderExerciseDetail(ctx, decodeURIComponent(param), from) : renderExerciseList(ctx);

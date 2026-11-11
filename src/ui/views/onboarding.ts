@@ -15,7 +15,8 @@ import {
 import { fromDisplayWeight, round, toDisplayWeight } from '../../core/units';
 import { getExercise } from '../../data/exercises';
 import type { ViewContext } from '../context';
-import { choiceGroup, clear, field, h, stepper } from '../dom';
+import { choiceGroup, clear, field, h } from '../dom';
+import { numberWheel } from '../number-wheel';
 import { ACTIVITY_LABELS, EQUIPMENT_LABELS, EXPERIENCE_LABELS, MUSCLE_LABELS, TIME_LABELS } from '../labels';
 
 type Draft = Pick<AppState, 'goal' | 'profile' | 'routine'> & { plan: PlanDay[] };
@@ -120,10 +121,11 @@ export function renderOnboarding(ctx: ViewContext): HTMLElement {
     const p = draft.profile;
     const name = h('input', { type: 'text', id: 'name', maxlength: MAX_NAME, value: p.name, autocomplete: 'nickname' });
     name.addEventListener('change', () => (p.name = cleanText(name.value, MAX_NAME)));
-    const num = (id: string, value: number | null, min: number, max: number, onSet: (v: number | null) => void) => {
-      const input = h('input', { type: 'number', id, min, max, step: 'any', inputmode: 'decimal', value: value ?? '' });
+    // `hint`: where an empty wheel rests (greyed) until turned, so it starts near a typical value.
+    const num = (id: string, value: number | null, min: number, max: number, hint: number, onSet: (v: number | null) => void) => {
+      const input = h('input', { type: 'number', id, min, max, step: 'any', inputmode: 'decimal', value: value ?? '', placeholder: hint });
       input.addEventListener('change', () => onSet(input.value === '' ? null : clampNumber(input.value, min, max, min)));
-      return stepper(input);
+      return numberWheel(input);
     };
     return h(
       'section',
@@ -150,11 +152,11 @@ export function renderOnboarding(ctx: ViewContext): HTMLElement {
       h(
         'div',
         { class: 'grid-3' },
-        field('Age', num('age', p.age, 13, 110, (v) => (p.age = v === null ? null : Math.round(v)))),
-        field('Height (cm)', num('height', p.heightCm, 100, 250, (v) => (p.heightCm = v))),
+        field('Age', num('age', p.age, 13, 110, 30, (v) => (p.age = v === null ? null : Math.round(v)))),
+        field('Height (cm)', num('height', p.heightCm, 100, 250, 170, (v) => (p.heightCm = v))),
         field(
           `Body weight (${units})`,
-          num('weight', p.weightKg === null ? null : toDisplayWeight(p.weightKg, units), 20, units === 'kg' ? 400 : 880, (v) =>
+          num('weight', p.weightKg === null ? null : toDisplayWeight(p.weightKg, units), 20, units === 'kg' ? 400 : 880, units === 'kg' ? 70 : 155, (v) =>
             (p.weightKg = v === null ? null : round(fromDisplayWeight(v, units), 2))),
         ),
       ),

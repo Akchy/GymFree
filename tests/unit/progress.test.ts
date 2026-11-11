@@ -6,7 +6,9 @@ import {
   loggedExerciseIds,
   muscleGroupCounts,
   personalRecords,
+  secondsPerRepSeries,
   totalReps,
+  workingSeconds,
   weekStreak,
   weightChange,
   workoutVolume,
@@ -48,6 +50,25 @@ describe('timed exercises', () => {
   it('records and charts the longest set, even with added weight', () => {
     expect(personalRecords(timed).find((p) => p.exerciseId === 'plank')).toMatchObject({ bestReps: 70, bestOneRepMax: 0, date: '2026-10-12' });
     expect(exerciseSeries(timed, 'plank')).toEqual([{ date: '2026-10-05', value: 55 }, { date: '2026-10-12', value: 70 }]);
+  });
+});
+
+describe('set times', () => {
+  const timedSets = [
+    w('s1', '2026-10-05', [
+      { exerciseId: 'push-up', sets: [{ reps: 10, weightKg: 0, seconds: 25 }, { reps: 10, weightKg: 0, seconds: 35 }, { reps: 5, weightKg: 0 }] },
+      { exerciseId: 'plank', sets: [{ reps: 45, weightKg: 0 }] }, // typed in by hand: its amount is seconds
+    ]),
+    w('s2', '2026-10-12', [{ exerciseId: 'push-up', sets: [{ reps: 0, weightKg: 0, seconds: 10 }, { reps: 12, weightKg: 0, seconds: 24 }] }]),
+  ];
+  it('adds up working time, or none when no set was timed', () => {
+    expect(workingSeconds(timedSets[0])).toBe(25 + 35 + 45);
+    expect(workingSeconds(workouts[0])).toBeNull();
+  });
+  it('charts average seconds per rep from timed sets only', () => {
+    expect(secondsPerRepSeries(timedSets, 'push-up')).toEqual([{ date: '2026-10-05', value: 3 }, { date: '2026-10-12', value: 2 }]);
+    expect(secondsPerRepSeries(timedSets, 'plank')).toEqual([]);
+    expect(secondsPerRepSeries(workouts, 'push-up')).toEqual([]);
   });
 });
 

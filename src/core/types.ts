@@ -77,8 +77,11 @@ export interface PlanDay {
 }
 
 export interface LoggedSet {
+  /** Reps, or seconds for a timed exercise (see isTimed). */
   reps: number;
   weightKg: number;
+  /** How long the set took, timed in workout mode; missing for sets typed in by hand. */
+  seconds?: number;
 }
 
 export interface LoggedExercise {

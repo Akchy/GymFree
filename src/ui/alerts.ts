@@ -55,7 +55,11 @@ let awakeUntil = 0;
  * tap is sure to restart it, so every tap is a chance to.
  */
 export function unlockSound(): void {
-  if (!soundsOn()) return;
+  if (soundsOn()) openAudio();
+}
+
+/** Creates (or restarts) the shared audio output. Only works after the user has tapped. */
+function openAudio(): void {
   try {
     // Mix with the user's music instead of pausing it, and follow the silent switch (Safari).
     const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
@@ -148,4 +152,85 @@ export function alertUser(pattern: number | number[] = 200): void {
     /* some browsers throw without a recent tap */
   }
   if (soundsOn()) beep();
+}
+
+/**
+ * Ticks while a number wheel turns (see number-wheel.ts): a separate per-device choice from the
+ * alerts above, on by default, since the user is touching the screen when they play.
+ */
+export const TICK_KEY = 'gymx:ticks';
+let tickOverride: boolean | null = null;
+
+export function getTicks(): boolean {
+  if (tickOverride !== null) return tickOverride;
+  try {
+    return storage()?.getItem(TICK_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+export function setTicks(on: boolean): void {
+  tickOverride = on;
+  try {
+    storage()?.setItem(TICK_KEY, on ? 'on' : 'off');
+  } catch {
+    /* storage blocked: the choice lasts for this visit only */
+  }
+}
+
+/** Gets sound ready for ticks; call when a turn starts (a pointerdown). */
+export function unlockTicks(): void {
+  if (getTicks()) openAudio();
+}
+
+let tickBuffer: AudioBuffer | null = null;
+let lastTick = 0;
+/** Ticks closer together than this are skipped, so a fast flick rattles instead of buzzing. */
+const TICK_GAP_MS = 22;
+
+/**
+ * One short, dry "detent" click per step: a filtered noise burst with a tiny pitched body,
+ * a little higher going up than down. With `haptic`, phones that can also buzz briefly.
+ */
+export function tick(dir: 1 | -1, haptic = false): void {
+  if (!getTicks()) return;
+  const now = Date.now();
+  if (now - lastTick < TICK_GAP_MS) return;
+  lastTick = now;
+  if (haptic && canVibrate()) {
+    try {
+      navigator.vibrate(4);
+    } catch {
+      /* needs a recent tap in some browsers */
+    }
+  }
+  whenRunning((ctx) => {
+    const t = ctx.currentTime;
+    if (!tickBuffer || tickBuffer.sampleRate !== ctx.sampleRate) {
+      const len = Math.floor(ctx.sampleRate * 0.012);
+      tickBuffer = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = tickBuffer.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 3;
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = tickBuffer;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = dir > 0 ? 4200 : 3200;
+    band.Q.value = 1.2;
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.value = 0.5;
+    noise.connect(band).connect(noiseGain).connect(ctx.destination);
+    noise.start(t);
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(dir > 0 ? 1500 : 1150, t);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.18, t + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.035);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.04);
+  });
 }

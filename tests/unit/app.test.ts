@@ -264,7 +264,7 @@ describe('App: everyday use', () => {
     const { app, root } = await makeApp(onboardedState());
     const expectations: [string, string][] = [
       ['/plan', 'My weekly plan'],
-      ['/plan/edit', 'Edit your plan'],
+      ['/plan/edit', 'My weekly plan'],
       ['/exercises', 'Exercise library'],
       ['/exercises/squat-typo', 'Exercise not found'],
       ['/exercises/push-up', 'Push-up'],

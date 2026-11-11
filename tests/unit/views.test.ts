@@ -4,6 +4,7 @@ import { generatePlan } from '../../src/core/planner';
 import { createDefaultState, MAX_WEIGHT_KG } from '../../src/core/state';
 import type { DeviceStore } from '../../src/core/store';
 import type { AppState, PlanDay } from '../../src/core/types';
+import { WEEKDAY_NAMES } from '../../src/core/types';
 import { nextPlanDay, renderDashboard } from '../../src/ui/views/dashboard';
 import { draftToEntries, lastWeight, readDraft } from '../../src/ui/views/log';
 import { prescriptionText } from '../../src/ui/views/plan';
@@ -77,11 +78,13 @@ describe('dashboard', () => {
 describe('plan (read-only)', () => {
   beforeEach(() => go(app, '/plan'));
 
-  it('shows a simple fixed plan with today highlighted and an edit button', () => {
+  it('shows a simple fixed plan with today highlighted and an edit button per day', () => {
     expect(root.querySelector('h1')?.textContent).toBe('My weekly plan');
-    expect(byText(root, 'a', 'Edit plan').getAttribute('href')).toBe('#/plan/edit');
     const sections = root.querySelectorAll('section.plan-view');
     expect(sections).toHaveLength(3);
+    expect([...sections].map((s) => byText(s as HTMLElement, 'a', 'Edit').getAttribute('href'))).toEqual(
+      state().plan.map((d) => `#/plan/edit/${d.id}`),
+    );
     expect(sections[0].classList.contains('today')).toBe(true);
     expect(sections[0].querySelector('.badge')?.textContent).toBe('Today');
     expect(root.querySelectorAll('input, select')).toHaveLength(0);
@@ -149,12 +152,19 @@ describe('plan (read-only)', () => {
   });
 });
 
-describe('plan editor', () => {
-  beforeEach(() => go(app, '/plan/edit'));
+describe('day editor', () => {
+  beforeEach(() => go(app, `/plan/edit/${state().plan[0].id}`));
 
-  it('has a Done button back to the fixed plan', () => {
+  it('edits only the chosen day and has a Done button back to the fixed plan', async () => {
+    expect(root.querySelectorAll('.plan-day')).toHaveLength(1);
     expect(byText(root, 'a', 'Done').getAttribute('href')).toBe('#/plan');
-    expect(root.querySelector('.plan-day tbody a')?.getAttribute('href')).toMatch(/\?from=plan-edit$/);
+    expect(root.querySelector('.plan-day tbody a')?.getAttribute('href')).toMatch(new RegExp(`\\?from=plan-edit:${state().plan[0].id}$`));
+    await go(app, `/plan/edit/${state().plan[1].id}`);
+    expect(root.querySelector<HTMLInputElement>('.day-name')!.value).toBe(state().plan[1].name);
+    await go(app, '/plan/edit/nope');
+    expect(root.querySelector('h1')?.textContent).toBe('Day not found');
+    await go(app, '/plan/edit');
+    expect(root.querySelector('h1')?.textContent).toBe('My weekly plan');
   });
 
   it('groups the exercise picker under muscle headers', () => {
@@ -257,25 +267,39 @@ describe('plan editor', () => {
     expect(state().plan[0].exercises.at(-1)?.exerciseId).toBe('burpee');
   });
 
-  it('adds, deletes and regenerates days', async () => {
+  it('deletes the day and returns to the plan', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    root.querySelector<HTMLButtonElement>('.plan-day button.link.danger')!.click();
+    await settle(app);
+    expect(state().plan).toHaveLength(3);
+    confirmSpy.mockReturnValue(true);
+    const id = state().plan[0].id;
+    root.querySelector<HTMLButtonElement>('.plan-day button.link.danger')!.click();
+    await settle(app);
+    expect(state().plan.map((d) => d.id)).not.toContain(id);
+    expect(root.querySelector('h1')?.textContent).toBe('My weekly plan');
+  });
+});
+
+describe('plan actions', () => {
+  beforeEach(() => go(app, '/plan'));
+
+  it('adds a day and opens its editor, and regenerates the plan', async () => {
     byText(root, 'button', '+ Add training day').click();
     await settle(app);
     expect(state().plan).toHaveLength(4);
+    expect(root.querySelector('h1')?.textContent).toBe('Edit Custom day');
     expect(root.textContent).toContain('No exercises yet.');
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    root.querySelectorAll<HTMLButtonElement>('.plan-day button.link.danger')[3].click();
-    await settle(app);
-    expect(state().plan).toHaveLength(3);
+    await go(app, '/plan');
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     const ids = state().plan.map((d) => d.id);
     byText(root, 'button', 'Regenerate the whole plan').click();
     await settle(app);
-    expect(state().plan.map((d) => d.id)).not.toEqual(ids);
-    confirmSpy.mockReturnValue(false);
-    const ids2 = state().plan.map((d) => d.id);
+    expect(state().plan.map((d) => d.id)).toEqual(ids);
+    confirmSpy.mockReturnValue(true);
     byText(root, 'button', 'Regenerate the whole plan').click();
-    root.querySelectorAll<HTMLButtonElement>('.plan-day button.link.danger')[0].click();
     await settle(app);
-    expect(state().plan.map((d) => d.id)).toEqual(ids2);
+    expect(state().plan.map((d) => d.id)).not.toEqual(ids);
   });
 });
 
@@ -376,7 +400,7 @@ describe('exercise library', () => {
   it('goes back to wherever the user came from', async () => {
     for (const [from, href, label] of [
       ['plan', '#/plan', '← Back to my plan'],
-      ['plan-edit', '#/plan/edit', '← Back to editing'],
+      ['plan-edit:abc', '#/plan/edit/abc', '← Back to editing'],
       ['home', '#/', '← Back to home'],
       ['nonsense', '#/exercises', '← All exercises'],
     ]) {
@@ -395,10 +419,20 @@ describe('workout logging', () => {
     expect(root.querySelectorAll('.link-card')).toHaveLength(4);
   });
 
+  it('names plan days by weekday, in week order, with the session name below', async () => {
+    await go(app, '/log');
+    const scheduled = state().plan.filter((d) => d.weekday !== null).sort((a, b) => a.weekday! - b.weekday!);
+    const cards = [...root.querySelectorAll('.link-card')].slice(0, scheduled.length);
+    cards.forEach((card, i) => {
+      expect(card.querySelector('strong')?.textContent).toMatch(new RegExp(`^${WEEKDAY_NAMES[scheduled[i].weekday!]}`));
+      expect(card.textContent).toContain(scheduled[i].name);
+    });
+  });
+
   it('starts each exercise with one empty set and shows targets as hints', async () => {
     const day = state().plan[0];
     await go(app, `/log/${day.id}`);
-    expect(root.querySelector('h1')?.textContent).toBe(day.name);
+    expect(root.querySelector('h1')?.textContent).toBe(`${day.weekday === null ? 'Any day' : WEEKDAY_NAMES[day.weekday]}${day.name}`);
     const entries = root.querySelectorAll('.log-entry');
     expect(entries).toHaveLength(day.exercises.length);
     for (const entry of entries) expect(entry.querySelectorAll('tbody tr')).toHaveLength(1);
@@ -538,12 +572,12 @@ describe('workout logging', () => {
     expect(readDraft(null)).toBeNull();
     expect(readDraft('x')).toBeNull();
     const d = readDraft({
-      entries: [{ exerciseId: 'push-up', sets: [{ reps: 5.4, weightKg: 5000 }, { reps: 'x' }] }, { exerciseId: 'nope', sets: [] }, 'junk'],
+      entries: [{ exerciseId: 'push-up', sets: [{ reps: 5.4, weightKg: 5000, seconds: 41.6 }, { reps: 'x', seconds: 'slow' }] }, { exerciseId: 'nope', sets: [] }, 'junk'],
       date: '2026-13-01',
       durationMin: -3,
       notes: 'a\u0000b',
     })!;
-    expect(d.entries).toEqual([{ exerciseId: 'push-up', sets: [{ reps: 5, weightKg: MAX_WEIGHT_KG }, { reps: null, weightKg: null }] }]);
+    expect(d.entries).toEqual([{ exerciseId: 'push-up', sets: [{ reps: 5, weightKg: MAX_WEIGHT_KG, seconds: 42 }, { reps: null, weightKg: null }] }]);
     expect(d.date).toBe('');
     expect(d.durationMin).toBe(0);
     expect(d.notes).toBe('ab');
@@ -614,6 +648,33 @@ describe('progress', () => {
     expect(root.querySelectorAll('.bars li')).toHaveLength(2);
     expect((root.querySelector('.bars .bar') as HTMLElement).style.getPropertyValue('--w')).toBe('100%');
     expect(root.querySelectorAll('.history li')).toHaveLength(2);
+  });
+
+  it('shows working time in the history and charts seconds per rep where sets were timed', async () => {
+    await seed();
+    // Without timed sets: no working time, no seconds-per-rep choice
+    expect(root.querySelector('.history')?.textContent).not.toContain('working');
+    const metric = root.querySelector<HTMLSelectElement>('select[aria-label="What to chart"]')!;
+    expect(metric.hidden).toBe(true);
+    await app['context']().update((s) => {
+      s.workouts[0].entries[0].sets = [{ reps: 10, weightKg: 10, seconds: 30 }];
+      s.workouts[1].entries[0].sets = [{ reps: 10, weightKg: 12, seconds: 25 }, { reps: 8, weightKg: 12 }];
+    });
+    await go(app, '/progress');
+    expect([...root.querySelectorAll('.history li')].map((li) => li.textContent)).toEqual([
+      expect.stringContaining('⏱ 25 s working'),
+      expect.stringContaining('⏱ 30 s working'),
+    ]);
+    const sel = root.querySelector<HTMLSelectElement>('select[aria-label="What to chart"]')!;
+    expect(sel.hidden).toBe(false);
+    change(sel, 'pace');
+    expect(root.querySelector('svg.chart')?.getAttribute('aria-label')).toBe('Dumbbell Biceps Curl: seconds per rep');
+    expect(root.querySelector('.chart-wrap figcaption')?.textContent).toBe('2026-10-20: 3 s per rep → 2026-10-27: 2.5 s per rep');
+    expect([...root.querySelectorAll('.chart title')].map((t) => t.textContent)).toEqual(['2026-10-20: 3 s per rep', '2026-10-27: 2.5 s per rep']);
+    // An exercise without timed sets falls back to the usual chart
+    change(root.querySelector<HTMLSelectElement>('select[aria-label="Exercise to chart"]')!, 'push-up');
+    expect(sel.hidden).toBe(true);
+    expect(root.querySelector('.chart-wrap figcaption')?.textContent).toContain('reps');
   });
 
   it('reaches every workout in a long history, a batch at a time', async () => {

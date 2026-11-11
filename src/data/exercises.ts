@@ -386,10 +386,18 @@ export function isTimed(ex: Exercise | undefined): boolean {
   return ex?.timed === true;
 }
 
+/** A length of time: "45 s", "1:30", or "1:02:05" from an hour. */
+export function durationText(sec: number): string {
+  const s = Math.max(0, Math.round(sec));
+  if (s < 60) return `${s} s`;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m}:${pad(s % 60)}` : `${Math.floor(m / 60)}:${pad(m % 60)}:${pad(s % 60)}`;
+}
+
 /** A set's amount: "12 reps", or for a timed exercise "45 s" / "1:30". */
 export function amountText(ex: Exercise | undefined, n: number): string {
-  if (!isTimed(ex)) return `${n} ${n === 1 ? 'rep' : 'reps'}`;
-  return n < 60 ? `${n} s` : `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
+  return isTimed(ex) ? durationText(n) : `${n} ${n === 1 ? 'rep' : 'reps'}`;
 }
 
 /** A planned range: "8–12 reps" or "30–45 s". */

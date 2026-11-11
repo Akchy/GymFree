@@ -5,7 +5,8 @@ import { weekdayOf } from '../../core/dates';
 import { MUSCLE_GROUPS, WEEKDAY_NAMES, type PlanDay, type PlannedExercise, type Weekday } from '../../core/types';
 import { CORE_EXERCISES, EXERCISES, filterExercises, getExercise, isTimed, rangeText, type Exercise } from '../../data/exercises';
 import type { ViewContext } from '../context';
-import { h, select, stepper } from '../dom';
+import { h, select } from '../dom';
+import { numberWheel } from '../number-wheel';
 import { renderDemo } from '../demo';
 import { howTo } from '../howto';
 import { startWorkoutHref } from '../device';
@@ -103,7 +104,8 @@ export function reshuffleButton(ctx: ViewContext, day: PlanDay): HTMLElement | n
   return btn;
 }
 
-function orderedDays(plan: readonly PlanDay[]): PlanDay[] {
+/** Plan days in week order (Monday first), unscheduled days last. */
+export function orderedDays(plan: readonly PlanDay[]): PlanDay[] {
   return [...plan].sort((a, b) => (a.weekday ?? 7) - (b.weekday ?? 7));
 }
 
@@ -114,8 +116,8 @@ export function renderPlan(ctx: ViewContext): HTMLElement {
   return h(
     'main',
     { class: 'container' },
-    h('div', { class: 'page-head' }, h('h1', {}, 'My weekly plan'), h('a', { href: '#/plan/edit', class: 'button secondary' }, 'Edit plan')),
-    days.length ? null : h('p', { class: 'muted' }, 'Your plan is empty. Use “Edit plan” to add a training day.'),
+    h('h1', {}, 'My weekly plan'),
+    days.length ? null : h('p', { class: 'muted' }, 'Your plan is empty. Use “+ Add training day” to start one.'),
     ...days.map((day) =>
       h(
         'section',
@@ -123,8 +125,13 @@ export function renderPlan(ctx: ViewContext): HTMLElement {
         h(
           'div',
           { class: 'day-head' },
-          h('h2', { id: `day-${day.id}` }, day.weekday === null ? 'Any day' : WEEKDAY_NAMES[day.weekday], h('span', { class: 'day-title' }, day.name)),
-          day.weekday === today ? h('span', { class: 'badge' }, 'Today') : null,
+          h('h2', { id: `day-${day.id}` }, dayLabel(day), h('span', { class: 'day-title' }, day.name)),
+          h(
+            'div',
+            { class: 'day-head-actions' },
+            day.weekday === today ? h('span', { class: 'badge' }, 'Today') : null,
+            h('a', { href: `#/plan/edit/${day.id}`, class: 'button secondary small', 'aria-label': `Edit ${dayLabel(day)}: ${day.name}` }, 'Edit'),
+          ),
         ),
         h('p', { class: 'muted' }, day.muscleGroups.map((g) => MUSCLE_LABELS[g]).join(' · ')),
         h('ul', { class: 'exercise-list' }, ...animateArrivals(ctx, day, day.exercises.map((pe) => exerciseItem(ctx, pe, 'plan')))),
@@ -132,16 +139,38 @@ export function renderPlan(ctx: ViewContext): HTMLElement {
         h('div', { class: 'row' }, h('a', { href: startWorkoutHref(day.id), class: 'button primary' }, 'Start this workout'), reshuffleButton(ctx, day)),
       ),
     ),
+    planActions(ctx),
   );
+}
+
+export function dayLabel(day: PlanDay): string {
+  return day.weekday === null ? 'Any day' : WEEKDAY_NAMES[day.weekday];
+}
+
+/** Whole-plan actions, below the days: add a day (opens its editor), change goal, regenerate. */
+function planActions(ctx: ViewContext): HTMLElement {
+  const add = h('button', { type: 'button', class: 'secondary' }, '+ Add training day');
+  add.addEventListener('click', async () => {
+    const id = randomId(8);
+    await ctx.update((s) => s.plan.push({ id, name: 'Custom day', weekday: null, muscleGroups: [], exercises: [], cardioMinutes: 0 }), { render: false });
+    ctx.navigate(`/plan/edit/${id}`);
+  });
+  const regen = h('button', { type: 'button', class: 'link danger' }, 'Regenerate the whole plan');
+  regen.addEventListener('click', () => {
+    if (confirm('Replace your current plan with a freshly generated one?')) {
+      void ctx.update((s) => (s.plan = generatePlan(s.goal, s.routine, s.profile)));
+    }
+  });
+  return h('div', { class: 'actions' }, add, h('a', { href: '#/onboarding', class: 'button secondary' }, 'Change goal & routine'), regen);
 }
 
 function numberInput(label: string, value: number, min: number, max: number, onSet: (v: number) => void): HTMLElement {
   const input = h('input', { type: 'number', min, max, step: 1, value, 'aria-label': label, class: 'num' });
   input.addEventListener('change', () => onSet(Math.round(clampNumber(input.value, min, max, value))));
-  return stepper(input, max >= 300 ? 15 : 1);
+  return numberWheel(input, max >= 300 ? 15 : 1);
 }
 
-function dayCard(ctx: ViewContext, day: PlanDay, index: number): HTMLElement {
+function dayCard(ctx: ViewContext, day: PlanDay): HTMLElement {
   const { state } = ctx;
   const mutateDay = (fn: (d: PlanDay) => void, render = true) =>
     ctx.update((s) => {
@@ -192,7 +221,7 @@ function dayCard(ctx: ViewContext, day: PlanDay, index: number): HTMLElement {
     return h(
       'tr',
       {},
-      h('td', {}, h('a', { href: `#/exercises/${pe.exerciseId}?from=plan-edit` }, ex?.name ?? pe.exerciseId)),
+      h('td', {}, h('a', { href: `#/exercises/${pe.exerciseId}?from=plan-edit:${day.id}` }, ex?.name ?? pe.exerciseId)),
       h('td', {}, numberInput(`Sets for ${ex?.name}`, pe.sets, 1, 10, (v) => mutateDay((d) => (d.exercises[ei].sets = v), false))),
       h(
         'td',
@@ -234,12 +263,13 @@ function dayCard(ctx: ViewContext, day: PlanDay, index: number): HTMLElement {
   const cardio = numberInput('Cardio minutes', day.cardioMinutes, 0, 180, (v) => mutateDay((d) => (d.cardioMinutes = v), false));
   const del = h('button', { type: 'button', class: 'link danger' }, 'Delete this day');
   del.addEventListener('click', () => {
-    if (confirm(`Delete "${day.name}"?`)) void ctx.update((s) => (s.plan = s.plan.filter((x) => x.id !== day.id)));
+    if (!confirm(`Delete "${day.name}"?`)) return;
+    void ctx.update((s) => (s.plan = s.plan.filter((x) => x.id !== day.id)), { render: false }).then(() => ctx.navigate('/plan'));
   });
 
   return h(
     'article',
-    { class: 'card plan-day', 'data-day': index },
+    { class: 'card plan-day' },
     h('div', { class: 'row' }, name, weekday),
     h('fieldset', {}, h('legend', {}, 'Muscle groups'), chips),
     suggest,
@@ -260,23 +290,17 @@ function dayCard(ctx: ViewContext, day: PlanDay, index: number): HTMLElement {
   );
 }
 
-export function renderPlanEditor(ctx: ViewContext): HTMLElement {
-  const add = h('button', { type: 'button', class: 'secondary' }, '+ Add training day');
-  add.addEventListener('click', () =>
-    ctx.update((s) => s.plan.push({ id: randomId(8), name: 'Custom day', weekday: null, muscleGroups: [], exercises: [], cardioMinutes: 0 })),
-  );
-  const regen = h('button', { type: 'button', class: 'link danger' }, 'Regenerate the whole plan');
-  regen.addEventListener('click', () => {
-    if (confirm('Replace your current plan with a freshly generated one?')) {
-      void ctx.update((s) => (s.plan = generatePlan(s.goal, s.routine, s.profile)));
-    }
-  });
+/** Edits one training day; the rest of the plan stays on the read-only page. */
+export function renderDayEditor(ctx: ViewContext, dayId: string): HTMLElement {
+  const day = ctx.state.plan.find((d) => d.id === dayId);
+  if (!day) {
+    return h('main', { class: 'container' }, h('h1', {}, 'Day not found'), h('a', { href: '#/plan' }, '← Back to my plan'));
+  }
   return h(
     'main',
     { class: 'container' },
-    h('div', { class: 'page-head' }, h('h1', {}, 'Edit your plan'), h('a', { href: '#/plan', class: 'button primary' }, 'Done')),
-    h('p', { class: 'muted' }, 'Changes save automatically. Change days, muscle groups, exercises, sets, reps and rest.'),
-    h('div', { class: 'stack' }, ...ctx.state.plan.map((d, i) => dayCard(ctx, d, i))),
-    h('div', { class: 'actions' }, add, h('a', { href: '#/onboarding', class: 'button secondary' }, 'Change goal & routine'), regen),
+    h('div', { class: 'page-head' }, h('h1', {}, `Edit ${day.weekday === null ? day.name : dayLabel(day)}`), h('a', { href: '#/plan', class: 'button primary' }, 'Done')),
+    h('p', { class: 'muted' }, 'Changes save automatically. Change the day, muscle groups, exercises, sets, reps and rest.'),
+    dayCard(ctx, day),
   );
 }

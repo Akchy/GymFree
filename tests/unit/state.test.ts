@@ -97,7 +97,7 @@ describe('sanitizeState', () => {
     const s = sanitizeState({
       version: 1,
       workouts: [
-        { id: 'w1', date: '2026-10-01', dayId: null, entries: [{ exerciseId: 'push-up', sets: [{ reps: 10, weightKg: 0 }, 'x'] }], notes: 'good', durationMin: 45 },
+        { id: 'w1', date: '2026-10-01', dayId: null, entries: [{ exerciseId: 'push-up', sets: [{ reps: 10, weightKg: 0 }, 'x', { reps: 8, weightKg: 0, seconds: 31.4 }, { reps: 6, weightKg: 0, seconds: 99999 }, { reps: 5, weightKg: 0, seconds: 0 }, { reps: 4, weightKg: 0, seconds: 'long' }] }], notes: 'good', durationMin: 45 },
         { id: 'w2', date: 'yesterday', entries: [] },
       ],
       bodyLogs: [
@@ -108,7 +108,14 @@ describe('sanitizeState', () => {
       ],
     });
     expect(s.workouts).toHaveLength(1);
-    expect(s.workouts[0].entries[0].sets).toEqual([{ reps: 10, weightKg: 0 }]);
+    // Set times are optional; bad ones are dropped, long ones capped at an hour
+    expect(s.workouts[0].entries[0].sets).toEqual([
+      { reps: 10, weightKg: 0 },
+      { reps: 8, weightKg: 0, seconds: 31 },
+      { reps: 6, weightKg: 0, seconds: 3600 },
+      { reps: 5, weightKg: 0 },
+      { reps: 4, weightKg: 0 },
+    ]);
     expect(s.bodyLogs).toEqual([{ date: '2026-10-01', weightKg: 81 }, { date: '2026-10-02', weightKg: 79.5 }]);
   });
 
