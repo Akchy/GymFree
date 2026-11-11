@@ -451,6 +451,30 @@ describe('App: signed in with Google', () => {
     expect((cloud.rows.get(ALEX.id)?.data as AppState).workouts).toHaveLength(1);
   });
 
+  it('keeps unsaved edits when synced data arrives mid-edit, then saves on top of it', async () => {
+    const cloud = signedIn();
+    const mine = { id: 'w1', date: '2026-10-20', dayId: null, entries: [{ exerciseId: 'push-up', sets: [{ reps: 10, weightKg: 0 }] }], durationMin: null, notes: '' };
+    (cloud.rows.get(ALEX.id)!.data as AppState).workouts = [mine];
+    const { app, root } = await makeApp(undefined, { cloud });
+    await go(app, '/history/w1/edit');
+    const reps = () => root.querySelector<HTMLInputElement>('input[aria-label="Push-up set 1 reps"]')!;
+    change(reps(), '15');
+    const other = onboardedState();
+    other.profile.name = 'Phone edit';
+    other.workouts = [mine, { id: 'phone-1', date: '2026-10-26', dayId: null, entries: [{ exerciseId: 'plank', sets: [{ reps: 30, weightKg: 0 }] }], durationMin: null, notes: '' }];
+    cloud.rows.set(ALEX.id, { data: other, updatedAt: new Date(NOW.getTime() + 3_600_000).toISOString() });
+    window.dispatchEvent(new Event('online'));
+    await settle(app);
+    expect(app.currentState!.profile.name).toBe('Alex'); // held back
+    expect(reps().value).toBe('15'); // the edit is still on screen
+    root.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    await settle(app, 12);
+    const ws = app.currentState!.workouts;
+    expect(app.currentState!.profile.name).toBe('Phone edit');
+    expect(ws.map((w) => w.id).sort()).toEqual(['phone-1', 'w1']);
+    expect(ws.find((w) => w.id === 'w1')!.entries[0].sets[0].reps).toBe(15);
+  });
+
   it('applies held-back data when leaving the workout without saving', async () => {
     const cloud = signedIn();
     const { app } = await makeApp(undefined, { cloud });

@@ -15,7 +15,7 @@ import { prefersReducedMotion } from './figure';
 import { effectiveTheme, setTheme, THEME_EVENT } from './theme';
 import { renderDashboard } from './views/dashboard';
 import { renderExerciseDetail, renderExerciseList } from './views/exercises';
-import { renderHistory } from './views/history';
+import { renderHistory, renderWorkoutDetail, renderWorkoutEdit } from './views/history';
 import { renderLogForm } from './views/log';
 import { renderNotFound } from './views/notfound';
 import { renderOnboarding } from './views/onboarding';
@@ -182,7 +182,7 @@ export class App {
   }
 
   private onLogForm(): boolean {
-    return /^\/(log|workout)\/[^/?]+/.test(this.route());
+    return /^\/((log|workout)\/[^/?]+|history\/[^/?]+\/edit)/.test(this.route());
   }
 
   private route(): string {
@@ -404,8 +404,13 @@ export class App {
         view = this.state.plan.some((d) => d.id === decodeURIComponent(param)) ? renderWorkout(ctx, decodeURIComponent(param)) : renderNotFound({ path, hasData: true });
         break;
       case 'history':
+        if (param && (!sub || sub === 'edit')) {
+          const id = decodeURIComponent(param);
+          view = sub ? renderWorkoutEdit(ctx, id) : renderWorkoutDetail(ctx, id);
+          break;
+        }
         if (param) {
-          view = renderNotFound({ path, hasData: true }); // detail and edit pages come later
+          view = renderNotFound({ path, hasData: true });
           break;
         }
         view = renderHistory(ctx, new URLSearchParams(query).get('view') === 'stats' ? 'stats' : 'workouts');

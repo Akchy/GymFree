@@ -797,6 +797,112 @@ describe('history', () => {
   });
 });
 
+describe('workout detail and edit', () => {
+  const ex = (exerciseId: string, sets: { reps: number; weightKg: number; seconds?: number }[]) => ({ exerciseId, sets });
+  async function seed() {
+    await app['context']().update((s) => {
+      s.workouts = [
+        { id: 'w1', date: '2026-10-20', dayId: s.plan[0].id, entries: [ex('dumbbell-curl', [{ reps: 10, weightKg: 40 }, { reps: 8, weightKg: 42.5 }]), ex('push-up', [{ reps: 15, weightKg: 0 }]), ex('plank', [{ reps: 45, weightKg: 0 }])], durationMin: 48, notes: 'Felt strong' },
+        { id: 'w2', date: '2026-10-27', dayId: null, entries: [ex('push-up', [{ reps: 12, weightKg: 0, seconds: 30 }])], durationMin: null, notes: '' },
+      ];
+    });
+  }
+  const submit = async () => {
+    root.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    await settle(app);
+  };
+
+  it('detail shows title, meta, chips, one line per exercise and notes', async () => {
+    await seed();
+    await go(app, '/history/w1');
+    expect(root.querySelector('main a[href="#/history"]')?.textContent).toBe('‹ History');
+    expect(byText(root, 'a', 'Edit').getAttribute('href')).toBe('#/history/w1/edit');
+    expect(root.querySelector('h1')?.textContent).toBe(state().plan[0].name);
+    expect(root.querySelector('.detail-meta')?.textContent).toBe('Tue 20 Oct · 48 min');
+    expect([...root.querySelectorAll('.chip')].map((c) => c.textContent)).toEqual(['3 exercises', '4 sets', '740 kg']);
+    const lines = [...root.querySelectorAll('.detail-exercise')].map((l) => l.textContent);
+    expect(lines).toEqual(['Dumbbell Biceps Curl10 × 40 · 8 × 42.5 kg', 'Push-up15', 'Plank45 s']);
+    expect(root.textContent).toContain('Felt strong');
+    await go(app, '/history/w2');
+    expect(root.querySelector('h1')?.textContent).toBe('Free workout');
+    expect(root.querySelector('.detail-meta')?.textContent).toBe('Tue 27 Oct');
+  });
+
+  it('edits a set and saves: same id, updatedAt set, count unchanged', async () => {
+    await seed();
+    await go(app, '/history/w1/edit');
+    change(root.querySelector<HTMLInputElement>('input[aria-label="Push-up set 1 reps"]')!, '20');
+    await submit();
+    const ws = state().workouts;
+    expect(ws).toHaveLength(2);
+    const w = ws.find((x) => x.id === 'w1')!;
+    expect(w.entries[1].sets[0].reps).toBe(20);
+    expect(w.updatedAt).toEqual(expect.any(String));
+    expect(w.notes).toBe('Felt strong');
+    expect(w.dayId).toBe(state().plan[0].id);
+    expect(window.location.hash).toBe('#/history/w1');
+  });
+
+  it('Cancel links back to the detail page and leaves the workout unchanged', async () => {
+    await seed();
+    await go(app, '/history/w1/edit');
+    change(root.querySelector<HTMLInputElement>('input[aria-label="Push-up set 1 reps"]')!, '99');
+    expect(byText(root, 'a', 'Cancel').getAttribute('href')).toBe('#/history/w1');
+    await go(app, '/history/w1');
+    expect(state().workouts.find((x) => x.id === 'w1')!.entries[1].sets[0].reps).toBe(15);
+    expect(state().workouts.find((x) => x.id === 'w1')!.updatedAt).toBeUndefined();
+  });
+
+  it('refuses to save with no reps left, with the entry screen message', async () => {
+    await seed();
+    await go(app, '/history/w2/edit');
+    change(root.querySelector<HTMLInputElement>('input[aria-label="Push-up set 1 reps"]')!, '');
+    await submit();
+    expect(root.querySelector('p[role="alert"]')?.textContent).toBe('Enter the reps (or seconds) for at least one set before saving.');
+    expect(state().workouts.find((x) => x.id === 'w2')!.updatedAt).toBeUndefined();
+    expect(state().workouts.find((x) => x.id === 'w2')!.entries[0].sets[0].reps).toBe(12);
+    expect(window.location.hash).toBe('#/history/w2/edit');
+  });
+
+  it('refuses a future date', async () => {
+    await seed();
+    await go(app, '/history/w2/edit');
+    change(root.querySelector<HTMLInputElement>('input[type="date"]')!, '2026-12-31');
+    await submit();
+    expect(root.querySelector('p[role="alert"]')?.textContent).toBe('Please choose a valid date (not in the future).');
+  });
+
+  it('keeps seconds when reps are untouched', async () => {
+    await seed();
+    await go(app, '/history/w2/edit');
+    await submit();
+    expect(state().workouts.find((x) => x.id === 'w2')!.entries[0].sets[0]).toEqual({ reps: 12, weightKg: 0, seconds: 30 });
+  });
+
+  it('deletes a workout after confirmation', async () => {
+    await seed();
+    await go(app, '/history/w1/edit');
+    const spy = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const del = byText(root, 'button.danger', 'Delete this workout');
+    del.click();
+    await settle(app);
+    expect(state().workouts).toHaveLength(2);
+    del.click();
+    await settle(app);
+    expect(spy).toHaveBeenLastCalledWith('Delete this workout? This can’t be undone.');
+    expect(state().workouts.map((w) => w.id)).toEqual(['w2']);
+    expect(state().deletedWorkoutIds).toContain('w1');
+    expect(window.location.hash).toBe('#/history');
+  });
+
+  it('shows not-found for ids that no longer exist', async () => {
+    for (const p of ['/history/nope', '/history/nope/edit']) {
+      await go(app, p);
+      expect(root.textContent).toMatch(/page not found/i);
+    }
+  });
+});
+
 describe('settings', () => {
   beforeEach(() => go(app, '/settings'));
 
