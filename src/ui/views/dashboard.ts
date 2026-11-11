@@ -2,7 +2,7 @@ import { weekdayOf } from '../../core/dates';
 import { GOAL_PROFILES, estimateCalories, routineAdvice } from '../../core/planner';
 import { weekStreak, workoutsInWeek } from '../../core/progress';
 import { WEEKDAY_NAMES, type PlanDay } from '../../core/types';
-import { getExercise } from '../../data/exercises';
+import { getExercise, rangeText } from '../../data/exercises';
 import type { ViewContext } from '../context';
 import { isPhone, startWorkoutHref } from '../device';
 import { h } from '../dom';
@@ -54,7 +54,7 @@ export function renderDashboard(ctx: ViewContext): HTMLElement {
         { class: 'compact' },
         ...animateArrivals(ctx, day, day.exercises.slice(0, 6).map((pe) => {
           const ex = getExercise(pe.exerciseId);
-          return h('li', {}, h('a', { href: `#/exercises/${pe.exerciseId}?from=home` }, ex?.name ?? pe.exerciseId), ` · ${pe.sets} × ${pe.repsMin}–${pe.repsMax}`);
+          return h('li', {}, h('a', { href: `#/exercises/${pe.exerciseId}?from=home` }, ex?.name ?? pe.exerciseId), ` · ${pe.sets} × ${rangeText(ex, pe.repsMin, pe.repsMax)}`);
         })),
       ),
       h(

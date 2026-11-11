@@ -1,7 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { CORE_EXERCISES, EXERCISES, exerciseDetails, filterExercises, getExercise, isAvailable } from '../../src/data/exercises';
+import { amountText, CORE_EXERCISES, EXERCISES, exerciseDetails, filterExercises, getExercise, isAvailable, isTimed, rangeText } from '../../src/data/exercises';
 import { MOTIONS, getMotion, type Pose } from '../../src/data/motions';
 import { EQUIPMENT, MUSCLE_GROUPS } from '../../src/core/types';
+
+describe('timed exercises', () => {
+  it('marks holds and intervals as timed, and everything else as reps', () => {
+    expect(EXERCISES.filter(isTimed).map((e) => e.id).sort()).toEqual(['high-knees', 'jump-rope', 'plank', 'side-plank', 'skipping']);
+    expect(isTimed(undefined)).toBe(false);
+  });
+  it('words amounts in reps or seconds', () => {
+    const plank = getExercise('plank');
+    const pushUp = getExercise('push-up');
+    expect(amountText(pushUp, 1)).toBe('1 rep');
+    expect(amountText(pushUp, 12)).toBe('12 reps');
+    expect(amountText(plank, 45)).toBe('45 s');
+    expect(amountText(plank, 90)).toBe('1:30');
+    expect(amountText(plank, 605)).toBe('10:05');
+    expect(rangeText(pushUp, 8, 12)).toBe('8–12 reps');
+    expect(rangeText(plank, 30, 30)).toBe('30 s');
+  });
+});
 
 describe('exercise library', () => {
   it('has unique, URL-safe ids', () => {

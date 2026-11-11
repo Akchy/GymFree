@@ -20,6 +20,8 @@ export interface Exercise {
   tip: string;
   /** Extended library: searchable and addable by hand, never picked for generated plans. */
   library?: boolean;
+  /** Done for a time (a hold or an interval): a set's `reps` holds the seconds worked. */
+  timed?: boolean;
 }
 
 export type ExerciseDetails = Pick<Exercise, 'steps' | 'tip'>;
@@ -294,9 +296,9 @@ export const CORE_EXERCISES: readonly Exercise[] = [
     steps: ['Sit in a leg press with the balls of your feet on the bottom edge.', 'Keeping your legs straight, push the plate away with your toes.', 'Let your heels come back slowly.'],
     tip: 'Keep the safety catches on and your feet firmly planted.' }),
   // Core
-  e({ id: 'plank', name: 'Plank', primary: 'core', secondary: ['shoulders'], equipment: ['bodyweight'], level: 'beginner', compound: false, motion: 'plank', prop: 'none',
+  e({ id: 'plank', name: 'Plank', primary: 'core', secondary: ['shoulders'], equipment: ['bodyweight'], level: 'beginner', compound: false, motion: 'plank', prop: 'none', timed: true,
     steps: ['Forearms on the floor, elbows under shoulders.', 'Keep a straight line from head to heels.', 'Hold while breathing steadily.'],
-    tip: 'For planks, "reps" are seconds held.' }),
+    tip: 'Stop as soon as your hips sag or rise.' }),
   e({ id: 'crunch', name: 'Crunch', primary: 'core', secondary: [], equipment: ['bodyweight'], level: 'beginner', compound: false, motion: 'crunch', prop: 'none',
     steps: ['Lie on your back with knees bent.', 'Curl your shoulders off the floor.', 'Lower slowly.'],
     tip: 'Do not pull on your neck.' }),
@@ -321,7 +323,7 @@ export const CORE_EXERCISES: readonly Exercise[] = [
   e({ id: 'dead-bug', name: 'Dead Bug', primary: 'core', secondary: [], equipment: ['bodyweight'], level: 'beginner', compound: false, motion: 'leg-raise', prop: 'none',
     steps: ['Lie on your back with arms up and knees bent over your hips.', 'Lower one leg and the opposite arm toward the floor.', 'Return, then switch sides.'],
     tip: 'Keep your lower back pressed into the floor.' }),
-  e({ id: 'side-plank', name: 'Side Plank', primary: 'core', secondary: ['shoulders'], equipment: ['bodyweight'], level: 'beginner', compound: false, motion: 'plank', prop: 'none',
+  e({ id: 'side-plank', name: 'Side Plank', primary: 'core', secondary: ['shoulders'], equipment: ['bodyweight'], level: 'beginner', compound: false, motion: 'plank', prop: 'none', timed: true,
     steps: ['Lie on your side with your elbow under your shoulder.', 'Lift your hips until your body is straight.', 'Hold, then lower. Switch sides.'],
     tip: 'Too hard? Bend your knees and rest them on the floor.' }),
   e({ id: 'cable-crunch', name: 'Cable Crunch', primary: 'core', secondary: [], equipment: ['cable'], level: 'beginner', compound: false, motion: 'crunch', prop: 'handle',
@@ -337,10 +339,10 @@ export const CORE_EXERCISES: readonly Exercise[] = [
   e({ id: 'jumping-jack', name: 'Jumping Jacks', primary: 'cardio', secondary: ['calves'], equipment: ['bodyweight'], level: 'beginner', compound: true, motion: 'jumping-jack', prop: 'none',
     steps: ['Stand with feet together, arms at sides.', 'Jump feet apart while raising arms overhead.', 'Jump back to start.'],
     tip: 'Step side-to-side instead of jumping for a low-impact version.' }),
-  e({ id: 'high-knees', name: 'High Knees / Jog', primary: 'cardio', secondary: ['legs', 'core'], equipment: ['bodyweight', 'machine'], level: 'beginner', compound: true, motion: 'run', prop: 'none',
+  e({ id: 'high-knees', name: 'High Knees / Jog', primary: 'cardio', secondary: ['legs', 'core'], equipment: ['bodyweight', 'machine'], level: 'beginner', compound: true, motion: 'run', prop: 'none', timed: true,
     steps: ['Run in place (or on a treadmill).', 'Drive knees up to hip height.', 'Pump your arms.'],
-    tip: 'For cardio, "reps" can be counted as minutes.' }),
-  e({ id: 'jump-rope', name: 'Jump Rope', primary: 'cardio', secondary: ['calves'], equipment: ['bodyweight'], level: 'beginner', compound: true, motion: 'jump', prop: 'none',
+    tip: 'For a longer steady run, use the day\'s cardio minutes instead.' }),
+  e({ id: 'jump-rope', name: 'Jump Rope', primary: 'cardio', secondary: ['calves'], equipment: ['bodyweight'], level: 'beginner', compound: true, motion: 'jump', prop: 'none', timed: true,
     steps: ['Hold the rope handles at hip height.', 'Turn the rope with your wrists.', 'Small jumps on the balls of your feet.'],
     tip: 'No rope? Do the motion without one.' }),
   e({ id: 'burpee', name: 'Burpee', primary: 'cardio', secondary: ['chest', 'legs', 'core'], equipment: ['bodyweight'], level: 'intermediate', compound: true, motion: 'burpee', prop: 'none',
@@ -355,7 +357,7 @@ export const CORE_EXERCISES: readonly Exercise[] = [
   e({ id: 'split-jump', name: 'Split Jump', primary: 'cardio', secondary: ['legs', 'glutes'], equipment: ['bodyweight'], level: 'intermediate', compound: true, motion: 'lunge', prop: 'none',
     steps: ['Start in a lunge with one foot forward.', 'Jump up and swap your legs in the air.', 'Land softly in a lunge on the other side.'],
     tip: 'Step through the lunges instead for an easier version.' }),
-  e({ id: 'skipping', name: 'Fast Skipping', primary: 'cardio', secondary: ['legs', 'calves'], equipment: ['bodyweight'], level: 'beginner', compound: true, motion: 'run', prop: 'none',
+  e({ id: 'skipping', name: 'Fast Skipping', primary: 'cardio', secondary: ['legs', 'calves'], equipment: ['bodyweight'], level: 'beginner', compound: true, motion: 'run', prop: 'none', timed: true,
     steps: ['Skip forward, driving one knee up as you hop.', 'Swing your opposite arm with each knee.', 'Keep a quick, light rhythm.'],
     tip: 'Stay on the balls of your feet.' }),
 ];
@@ -377,6 +379,23 @@ export async function exerciseDetails(ex: Exercise): Promise<ExerciseDetails> {
   if (!ex.library) return ex;
   const { LIBRARY_DETAILS } = await import('./library-details');
   return LIBRARY_DETAILS[ex.id];
+}
+
+/** Is the exercise measured in seconds (a hold or an interval) rather than reps? */
+export function isTimed(ex: Exercise | undefined): boolean {
+  return ex?.timed === true;
+}
+
+/** A set's amount: "12 reps", or for a timed exercise "45 s" / "1:30". */
+export function amountText(ex: Exercise | undefined, n: number): string {
+  if (!isTimed(ex)) return `${n} ${n === 1 ? 'rep' : 'reps'}`;
+  return n < 60 ? `${n} s` : `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
+}
+
+/** A planned range: "8–12 reps" or "30–45 s". */
+export function rangeText(ex: Exercise | undefined, min: number, max: number): string {
+  const nums = min === max ? `${min}` : `${min}–${max}`;
+  return isTimed(ex) ? `${nums} s` : `${nums} reps`;
 }
 
 export function isAvailable(ex: Exercise, equipment: readonly Equipment[]): boolean {

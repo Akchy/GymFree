@@ -1,9 +1,9 @@
 import { randomId } from '../../core/encoding';
 import { generatePlan, prescription, refillDay, reshuffleDay } from '../../core/planner';
-import { clampNumber, cleanText, MAX_NAME } from '../../core/state';
+import { clampNumber, cleanText, MAX_NAME, maxTarget } from '../../core/state';
 import { weekdayOf } from '../../core/dates';
 import { MUSCLE_GROUPS, WEEKDAY_NAMES, type PlanDay, type PlannedExercise, type Weekday } from '../../core/types';
-import { CORE_EXERCISES, EXERCISES, filterExercises, getExercise, type Exercise } from '../../data/exercises';
+import { CORE_EXERCISES, EXERCISES, filterExercises, getExercise, isTimed, rangeText, type Exercise } from '../../data/exercises';
 import type { ViewContext } from '../context';
 import { h, select, stepper } from '../dom';
 import { renderDemo } from '../demo';
@@ -11,9 +11,8 @@ import { howTo } from '../howto';
 import { startWorkoutHref } from '../device';
 import { MUSCLE_LABELS } from '../labels';
 
-export function prescriptionText(pe: Pick<PlannedExercise, 'sets' | 'repsMin' | 'repsMax' | 'restSec'>): string {
-  const reps = pe.repsMin === pe.repsMax ? `${pe.repsMin}` : `${pe.repsMin}–${pe.repsMax}`;
-  return `${pe.sets} sets × ${reps} reps · ${pe.restSec} s rest`;
+export function prescriptionText(pe: Pick<PlannedExercise, 'exerciseId' | 'sets' | 'repsMin' | 'repsMax' | 'restSec'>): string {
+  return `${pe.sets} sets × ${rangeText(getExercise(pe.exerciseId), pe.repsMin, pe.repsMax)} · ${pe.restSec} s rest`;
 }
 
 /**
@@ -185,6 +184,7 @@ function dayCard(ctx: ViewContext, day: PlanDay, index: number): HTMLElement {
 
   const rows = day.exercises.map((pe, ei) => {
     const ex = getExercise(pe.exerciseId);
+    const unit = isTimed(ex) ? 'seconds' : 'reps';
     const remove = h('button', { type: 'button', class: 'icon danger', 'aria-label': `Remove ${ex?.name}` }, '✕');
     remove.addEventListener('click', () => mutateDay((d) => d.exercises.splice(ei, 1)));
     const up = h('button', { type: 'button', class: 'icon', 'aria-label': `Move ${ex?.name} up`, disabled: ei === 0 }, '↑');
@@ -197,12 +197,12 @@ function dayCard(ctx: ViewContext, day: PlanDay, index: number): HTMLElement {
       h(
         'td',
         { class: 'nowrap' },
-        numberInput(`Minimum reps for ${ex?.name}`, pe.repsMin, 1, 100, (v) => mutateDay((d) => {
+        numberInput(`Minimum ${unit} for ${ex?.name}`, pe.repsMin, 1, maxTarget(ex), (v) => mutateDay((d) => {
           d.exercises[ei].repsMin = v;
           d.exercises[ei].repsMax = Math.max(v, d.exercises[ei].repsMax);
         })),
         '–',
-        numberInput(`Maximum reps for ${ex?.name}`, pe.repsMax, 1, 100, (v) => mutateDay((d) => {
+        numberInput(`Maximum ${unit} for ${ex?.name}`, pe.repsMax, 1, maxTarget(ex), (v) => mutateDay((d) => {
           d.exercises[ei].repsMax = v;
           d.exercises[ei].repsMin = Math.min(v, d.exercises[ei].repsMin);
         })),
@@ -250,7 +250,7 @@ function dayCard(ctx: ViewContext, day: PlanDay, index: number): HTMLElement {
           h(
             'table',
             {},
-            h('thead', {}, h('tr', {}, h('th', {}, 'Exercise'), h('th', {}, 'Sets'), h('th', {}, 'Reps'), h('th', {}, 'Rest (s)'), h('th', {}, h('span', { class: 'sr-only' }, 'Actions')))),
+            h('thead', {}, h('tr', {}, h('th', {}, 'Exercise'), h('th', {}, 'Sets'), h('th', {}, 'Reps / s'), h('th', {}, 'Rest (s)'), h('th', {}, h('span', { class: 'sr-only' }, 'Actions')))),
             h('tbody', {}, ...rows),
           ),
         )

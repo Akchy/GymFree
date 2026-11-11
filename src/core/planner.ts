@@ -2,7 +2,7 @@
  * Turns a goal + daily routine into a weekly plan of training days and exercises.
  * Everything produced here is a suggestion: the user can edit every field afterwards.
  */
-import { CORE_EXERCISES, getExercise, isAvailable, type Exercise } from '../data/exercises';
+import { CORE_EXERCISES, getExercise, isAvailable, isTimed, type Exercise } from '../data/exercises';
 import { randomId } from './encoding';
 import {
   EXPERIENCE,
@@ -139,10 +139,18 @@ function levelRank(level: Experience): number {
   return EXPERIENCE.indexOf(level);
 }
 
+/** Target seconds for a timed exercise, by experience. */
+const TIMED_SECONDS: Record<Experience, [number, number]> = { beginner: [20, 40], intermediate: [30, 60], advanced: [45, 90] };
+
 export function prescription(goal: Goal, experience: Experience, ex: Exercise): Omit<PlannedExercise, 'exerciseId'> {
   const g = GOAL_PROFILES[goal];
   let sets = g.sets + (experience === 'beginner' ? -1 : experience === 'advanced' ? 1 : 0);
   sets = Math.max(2, Math.min(6, sets));
+  if (isTimed(ex)) {
+    // Seconds per set: holds and intervals grow with experience.
+    const [repsMin, repsMax] = TIMED_SECONDS[experience];
+    return { sets: Math.min(sets, 3), repsMin, repsMax, restSec: 30 };
+  }
   if (ex.primary === 'cardio' || ex.primary === 'core' || ex.primary === 'calves') {
     return { sets: Math.min(sets, 3), repsMin: 15, repsMax: 30, restSec: 30 };
   }

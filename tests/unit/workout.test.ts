@@ -4,6 +4,7 @@ import type { AppState } from '../../src/core/types';
 import { getExercise } from '../../src/data/exercises';
 import { PHONE_QUERY } from '../../src/ui/device';
 import { clock } from '../../src/ui/views/workout';
+import * as alerts from '../../src/ui/alerts';
 import { generatePlan } from '../../src/core/planner';
 import { renderDashboard } from '../../src/ui/views/dashboard';
 import { byText, change, fakeContext, go, makeApp, NOW, onboardedState, settle } from './helpers';
@@ -91,6 +92,73 @@ describe('workout mode', () => {
     // A set more than planned is just another start / stop
     for (let i = 0; i < first.sets; i++) doSet(page);
     expect(page.querySelectorAll('.reel-set.done')).toHaveLength(first.sets + 1);
+  });
+
+  it('logs a timed exercise with the time on the clock and buzzes at the goal time', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const vibrate = vi.fn();
+    Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true });
+    const s = onboardedState();
+    s.plan[0].exercises = [{ exerciseId: 'plank', sets: 3, repsMin: 30, repsMax: 45, restSec: 30 }];
+    ({ app, root } = await makeApp(s));
+    await go(app, `/workout/${day().id}`);
+    const page = pages()[0];
+    expect(page.textContent).toContain('Goal 30 s');
+    expect(page.textContent).not.toContain('reps');
+    btn(page, /^Longer goal time/).click();
+    expect(page.textContent).toContain('Goal 35 s');
+    btn(page, /^Start set/).click();
+    time += 20_000;
+    vi.advanceTimersByTime(500);
+    expect(vibrate).not.toHaveBeenCalled();
+    time += 16_000;
+    vi.advanceTimersByTime(500);
+    expect(vibrate).toHaveBeenCalledTimes(1);
+    time += 6_000;
+    vi.advanceTimersByTime(500);
+    expect(vibrate).toHaveBeenCalledTimes(1);
+    btn(page, /^Stop and log/).click();
+    expect(page.querySelector('.reel-set.done')?.textContent).toContain('42 s × BW');
+    // The next set still aims for the goal, not the last set's time
+    expect(page.textContent).toContain('Goal 35 s');
+    btn(page, /^Edit set 1/).click();
+    const sheet = root.querySelector<HTMLElement>('.reel-sheet')!;
+    expect(sheet.textContent).toContain('Time');
+    btn(sheet, /^More time/).click();
+    expect(sheet.textContent).toContain('45 s');
+    byText(sheet, 'button', 'Done').click();
+    byText(root.querySelector('.reel-summary')!, 'button', 'Save workout').click();
+    await settle(app);
+    expect(state().workouts.at(-1)!.entries).toEqual([{ exerciseId: 'plank', sets: [{ reps: 45, weightKg: 0 }] }]);
+    vi.useRealTimers();
+    delete (navigator as { vibrate?: unknown }).vibrate;
+  });
+
+  it('alerts when a rest ends, even with another exercise on screen', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const vibrate = vi.fn();
+    Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true });
+    await go(app, `/workout/${day().id}`);
+    doSet(pages()[0]);
+    // The user moves on to the next exercise during the rest
+    const feed = root.querySelector<HTMLElement>('.reel-feed')!;
+    Object.defineProperty(feed, 'clientHeight', { value: 800, configurable: true });
+    feed.scrollTop = 800;
+    feed.dispatchEvent(new Event('scroll'));
+    const wake = vi.spyOn(alerts, 'keepSoundAwake');
+    time += day().exercises[0].restSec * 1000 - 3000;
+    vi.advanceTimersByTime(500);
+    expect(wake).not.toHaveBeenCalled();
+    time += 2000; // 1 s to go: wake Bluetooth earphones before the beep
+    vi.advanceTimersByTime(500);
+    expect(wake).toHaveBeenCalled();
+    expect(vibrate).not.toHaveBeenCalled();
+    time += 1000;
+    vi.advanceTimersByTime(500);
+    expect(vibrate).toHaveBeenCalledWith(200);
+    expect(document.querySelector('.toast')?.textContent).toBe(`Rest is over for ${getExercise(day().exercises[0].exerciseId)!.name}.`);
+    vi.useRealTimers();
+    delete (navigator as { vibrate?: unknown }).vibrate;
   });
 
   it('lets the user change the rest, for this rest and the next ones of the exercise', async () => {

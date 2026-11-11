@@ -190,7 +190,7 @@ th, td { text-align: left; padding: 0.35rem; border-bottom: 1px solid var(--bord
 .history li { display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
 .danger-zone { border-color: var(--danger); }
 
-.toast { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%) translateY(150%); background: var(--text); color: var(--bg); padding: 0.6rem 1rem; border-radius: 999px; transition: transform 0.25s, opacity 0.25s, visibility 0.25s; z-index: 10; pointer-events: none; opacity: 0; visibility: hidden; }
+.toast { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%) translateY(150%); background: var(--text); color: var(--bg); padding: 0.6rem 1rem; border-radius: 1.25rem; width: max-content; max-width: min(28rem, calc(100vw - 2rem)); text-align: center; text-wrap: balance; transition: transform 0.25s, opacity 0.25s, visibility 0.25s; z-index: 10; pointer-events: none; opacity: 0; visibility: hidden; }
 .toast button.link { pointer-events: auto; color: inherit; font-weight: 600; }
 .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; visibility: visible; }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }

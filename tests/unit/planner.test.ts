@@ -77,8 +77,14 @@ describe('prescription', () => {
     expect(prescription('gain-muscle', 'advanced', bench).sets).toBe(4);
   });
   it('uses high reps for core/cardio and light accessories for strength', () => {
-    expect(prescription('gain-strength', 'advanced', getExercise('plank')!)).toMatchObject({ repsMin: 15, restSec: 30 });
+    expect(prescription('gain-strength', 'advanced', getExercise('crunch')!)).toMatchObject({ repsMin: 15, restSec: 30 });
     expect(prescription('gain-strength', 'intermediate', getExercise('lateral-raise')!)).toEqual({ sets: 2, repsMin: 8, repsMax: 12, restSec: 90 });
+  });
+  it('gives timed exercises seconds that grow with experience', () => {
+    const plank = getExercise('plank')!;
+    expect(prescription('gain-muscle', 'beginner', plank)).toMatchObject({ repsMin: 20, repsMax: 40, restSec: 30 });
+    expect(prescription('gain-muscle', 'intermediate', plank)).toMatchObject({ repsMin: 30, repsMax: 60 });
+    expect(prescription('endurance', 'advanced', getExercise('jump-rope')!)).toMatchObject({ repsMin: 45, repsMax: 90 });
   });
 });
 

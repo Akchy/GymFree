@@ -36,6 +36,21 @@ describe('volume and reps', () => {
   });
 });
 
+describe('timed exercises', () => {
+  const timed = [
+    w('t1', '2026-10-05', [{ exerciseId: 'plank', sets: [{ reps: 40, weightKg: 0 }, { reps: 55, weightKg: 0 }] }, { exerciseId: 'push-up', sets: [{ reps: 10, weightKg: 0 }] }]),
+    w('t2', '2026-10-12', [{ exerciseId: 'plank', sets: [{ reps: 70, weightKg: 10 }] }]),
+  ];
+  it('leaves their seconds out of reps and volume', () => {
+    expect(totalReps(timed[0])).toBe(10);
+    expect(workoutVolume(timed[1])).toBe(0);
+  });
+  it('records and charts the longest set, even with added weight', () => {
+    expect(personalRecords(timed).find((p) => p.exerciseId === 'plank')).toMatchObject({ bestReps: 70, bestOneRepMax: 0, date: '2026-10-12' });
+    expect(exerciseSeries(timed, 'plank')).toEqual([{ date: '2026-10-05', value: 55 }, { date: '2026-10-12', value: 70 }]);
+  });
+});
+
 describe('personalRecords', () => {
   it('tracks best weight, reps and 1RM per exercise', () => {
     const prs = personalRecords(workouts);

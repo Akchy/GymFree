@@ -143,8 +143,9 @@ describe('plan (read-only)', () => {
   });
 
   it('formats prescriptions', () => {
-    expect(prescriptionText({ sets: 3, repsMin: 8, repsMax: 12, restSec: 90 })).toBe('3 sets × 8–12 reps · 90 s rest');
-    expect(prescriptionText({ sets: 5, repsMin: 5, repsMax: 5, restSec: 180 })).toBe('5 sets × 5 reps · 180 s rest');
+    expect(prescriptionText({ exerciseId: 'bench-press', sets: 3, repsMin: 8, repsMax: 12, restSec: 90 })).toBe('3 sets × 8–12 reps · 90 s rest');
+    expect(prescriptionText({ exerciseId: 'bench-press', sets: 5, repsMin: 5, repsMax: 5, restSec: 180 })).toBe('5 sets × 5 reps · 180 s rest');
+    expect(prescriptionText({ exerciseId: 'plank', sets: 3, repsMin: 30, repsMax: 45, restSec: 30 })).toBe('3 sets × 30–45 s · 30 s rest');
   });
 });
 
@@ -440,8 +441,9 @@ describe('workout logging', () => {
     expect(root.querySelectorAll('.log-entry')).toHaveLength(day.exercises.length - 1);
     change(root.querySelector<HTMLSelectElement>('select[aria-label="Add exercise"]')!, 'plank');
     change(root.querySelector<HTMLSelectElement>('select[aria-label="Add exercise"]')!, 'not-real');
-    change(root.querySelector<HTMLInputElement>('input[aria-label="Plank set 1 reps"]')!, '45');
-    change(root.querySelector<HTMLInputElement>('input[aria-label="Plank set 1 reps"]')!, '');
+    expect(root.querySelectorAll('.log-entry')[day.exercises.length - 1].querySelector('th:nth-child(2)')?.textContent).toBe('Seconds');
+    change(root.querySelector<HTMLInputElement>('input[aria-label="Plank set 1 seconds"]')!, '45');
+    change(root.querySelector<HTMLInputElement>('input[aria-label="Plank set 1 seconds"]')!, '');
     change(root.querySelector<HTMLInputElement>('#log-duration')!, '50');
     root.querySelector<HTMLTextAreaElement>('#log-notes')!.value = 'Felt strong';
     root.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
@@ -673,6 +675,13 @@ describe('settings', () => {
     expect(state().settings.units).toBe('lb');
     expect(store.read('local')?.state.settings.units).toBe('lb');
     expect(root.querySelector('#auto-lock')).toBeNull();
+    // Sound alerts: a per-device choice, not part of the synced data
+    const sounds = root.querySelector<HTMLInputElement>('#sounds')!;
+    expect(sounds.checked).toBe(true); // this test browser cannot vibrate
+    expect(root.textContent).toContain('sound is the only alert');
+    check(sounds, false);
+    expect(localStorage.getItem('gymx:sounds')).toBe('off');
+    expect(JSON.stringify(state())).not.toContain('sound');
     expect(root.textContent).not.toMatch(/passphrase|Lock now|encrypt/i);
   });
 

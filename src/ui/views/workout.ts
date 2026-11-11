@@ -1,18 +1,20 @@
 /**
  * Workout mode: a full-screen feed with one exercise per page (swipe up for the next).
  * Each page times a set with start / pause / stop; stopping logs the set with the reps
- * and weight shown, which start from the last set or session. Swiping sideways flips the
+ * and weight shown, which start from the last set or session. A timed exercise (plank,
+ * jump rope…) logs the time on the clock instead, and buzzes once its goal time is reached. Swiping sideways flips the
  * page to show how to do the exercise. Progress is kept in the same draft as the log form.
  */
 import { isISODate } from '../../core/dates';
 import { randomId } from '../../core/encoding';
-import { clampNumber, cleanText, MAX_NOTES, MAX_WEIGHT_KG } from '../../core/state';
+import { clampNumber, cleanText, MAX_NOTES, MAX_TARGET_SECONDS, MAX_WEIGHT_KG } from '../../core/state';
 import type { PlannedExercise, WorkoutLog } from '../../core/types';
 import { fromDisplayWeight, round, toDisplayWeight } from '../../core/units';
-import { type Exercise, getExercise } from '../../data/exercises';
+import { amountText, type Exercise, getExercise, isTimed } from '../../data/exercises';
 import { photoUrls } from '../../data/photos';
 import type { ViewContext } from '../context';
 import { h, svg } from '../dom';
+import { alertUser, keepSoundAwake, unlockSound } from '../alerts';
 import { renderDemo } from '../demo';
 import { howTo as renderHowTo } from '../howto';
 import { renderFigure } from '../figure';
@@ -30,8 +32,10 @@ interface Card {
   ex: Exercise;
   target: PlannedExercise | null;
   sets: WorkoutSet[];
-  /** What the next set will be logged with. */
+  /** What the next set will be logged with; for a timed exercise `reps` is the goal in seconds. */
   next: WorkoutSet;
+  /** Timed exercise: the goal time of the running set has been announced. */
+  goalHit: boolean;
   mode: Mode;
   /** Time on the set before the last pause, and when it was last started (ms). */
   workedMs: number;
@@ -49,6 +53,9 @@ const NO_ZOOM = ', maximum-scale=1, user-scalable=no';
 let latestView = 0;
 const SWIPE_PX = 50;
 const REST_STEP_SEC = 15;
+/** Step of the −/+ buttons for a timed exercise's seconds. */
+const TIME_STEP_SEC = 5;
+const DEFAULT_GOAL_SEC = 30;
 const MAX_REST_SEC = 600;
 
 /** mm:ss for a number of seconds. */
@@ -92,8 +99,11 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
     // Sets the form left without reps are not logged yet.
     const sets = e.sets.filter((s) => (s.reps ?? 0) > 0).map((s) => ({ reps: s.reps as number, weightKg: s.weightKg ?? 0 }));
     const prev = sets.at(-1);
-    const next = prev ? { ...prev } : { reps: target?.repsMin ?? 10, weightKg: lastWeight(state.workouts, ex.id) };
-    return [{ ex, target, sets, next, mode: 'idle' as Mode, workedMs: 0, runningSince: null, restEndsAt: null, restSec: target?.restSec ?? DEFAULT_REST_SEC }];
+    const weightKg = prev?.weightKg ?? lastWeight(state.workouts, ex.id);
+    // A timed exercise aims for the plan's time, not the length of the last set.
+    const reps = isTimed(ex) ? target?.repsMin ?? DEFAULT_GOAL_SEC : prev?.reps ?? target?.repsMin ?? 10;
+    const next = { reps, weightKg };
+    return [{ ex, target, sets, next, goalHit: false, mode: 'idle' as Mode, workedMs: 0, runningSince: null, restEndsAt: null, restSec: target?.restSec ?? DEFAULT_REST_SEC }];
   });
 
   const persist = () => {
@@ -110,7 +120,7 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
   };
 
   const weightText = (ex: Exercise, kg: number) => (kg === 0 && ex.equipment.includes('bodyweight') ? 'Bodyweight' : `${toDisplayWeight(kg, units)} ${units}`);
-  const setText = (ex: Exercise, s: WorkoutSet) => `${s.reps} × ${s.weightKg === 0 && ex.equipment.includes('bodyweight') ? 'BW' : toDisplayWeight(s.weightKg, units)}`;
+  const setText = (ex: Exercise, s: WorkoutSet) => `${isTimed(ex) ? amountText(ex, s.reps) : s.reps} × ${s.weightKg === 0 && ex.equipment.includes('bodyweight') ? 'BW' : toDisplayWeight(s.weightKg, units)}`;
   /** One step of the weight buttons: 2.5 kg or 5 lb, snapped to that grid. */
   const stepWeight = (kg: number, dir: -1 | 1) => {
     const by = units === 'kg' ? 2.5 : 5;
@@ -119,6 +129,13 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
     return round(clampNumber(fromDisplayWeight(next, units), 0, MAX_WEIGHT_KG, 0), 3);
   };
   const stepReps = (reps: number, dir: -1 | 1) => Math.round(clampNumber(reps + dir, 1, 1000, 1));
+  /** Seconds in steps of 5, snapped to that grid. */
+  const stepSeconds = (sec: number, dir: -1 | 1, max: number) => {
+    const next = dir > 0 ? Math.floor(sec / TIME_STEP_SEC + 1e-9) * TIME_STEP_SEC + TIME_STEP_SEC : Math.ceil(sec / TIME_STEP_SEC - 1e-9) * TIME_STEP_SEC - TIME_STEP_SEC;
+    return Math.round(clampNumber(next, 1, max, 1));
+  };
+  const stepAmount = (ex: Exercise, n: number, dir: -1 | 1, max = 1000) => (isTimed(ex) ? stepSeconds(n, dir, max) : stepReps(n, dir));
+  const amountWord = (ex: Exercise) => (isTimed(ex) ? 'Time' : 'Reps');
 
   const worked = (c: Card) => c.workedMs + (c.runningSince === null ? 0 : now() - c.runningSince);
 
@@ -127,7 +144,9 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
   const sheetTitle = h('h2', { id: 'edit-set-title' }, 'Edit set');
   const sheetWeight = h('span', { class: 'chip-value' });
   const sheetReps = h('span', { class: 'chip-value' });
-  const sheetChip = (label: string, value: HTMLElement, change: (s: WorkoutSet, dir: -1 | 1) => void, names: [string, string]) => {
+  const sheetRepsLabel = h('span', {}, 'Reps');
+  let sheetRepsRow: HTMLElement;
+  const sheetChip = (label: string | HTMLElement, value: HTMLElement, change: (s: WorkoutSet, dir: -1 | 1) => void, names: [string, string]) => {
     const btn = (dir: -1 | 1) => {
       const b = h('button', { type: 'button', 'aria-label': names[dir < 0 ? 0 : 1] }, dir < 0 ? '−' : '+');
       b.addEventListener('click', () => {
@@ -139,7 +158,7 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
       });
       return b;
     };
-    return h('div', { class: 'sheet-row' }, h('span', {}, label), h('span', { class: 'reel-chip big' }, btn(-1), value, btn(1)));
+    return h('div', { class: 'sheet-row' }, typeof label === 'string' ? h('span', {}, label) : label, h('span', { class: 'reel-chip big' }, btn(-1), value, btn(1)));
   };
   const deleteBtn = h('button', { type: 'button', class: 'sheet-delete' }, 'Delete set');
   const doneBtn = h('button', { type: 'button', class: 'sheet-done' }, 'Done');
@@ -149,7 +168,7 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
     { class: 'reel-sheet', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'edit-set-title', hidden: true },
     sheetTitle,
     sheetChip('Weight', sheetWeight, (s, d) => (s.weightKg = stepWeight(s.weightKg, d)), ['Less weight', 'More weight']),
-    sheetChip('Reps', sheetReps, (s, d) => (s.reps = stepReps(s.reps, d)), ['Fewer reps', 'More reps']),
+    (sheetRepsRow = sheetChip(sheetRepsLabel, sheetReps, (s, d) => editing && (s.reps = stepAmount(editing.card.ex, s.reps, d)), ['Fewer reps', 'More reps'])),
     h('div', { class: 'sheet-actions' }, deleteBtn, doneBtn),
   );
   const paintSheet = () => {
@@ -157,7 +176,12 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
     const s = editing.card.sets[editing.index];
     sheetTitle.textContent = `Edit set ${editing.index + 1}`;
     sheetWeight.textContent = weightText(editing.card.ex, s.weightKg);
-    sheetReps.textContent = `${s.reps} reps`;
+    sheetRepsLabel.textContent = amountWord(editing.card.ex);
+    const [less, more] = sheetRepsRow.querySelectorAll('button');
+    const timed = isTimed(editing.card.ex);
+    less.setAttribute('aria-label', timed ? 'Less time' : 'Fewer reps');
+    more.setAttribute('aria-label', timed ? 'More time' : 'More reps');
+    sheetReps.textContent = amountText(editing.card.ex, s.reps);
   };
   const openSheet = (card: Card, index: number, opener: HTMLElement) => {
     editing = { card, index, opener };
@@ -216,15 +240,21 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
         card.runningSince = null;
         card.mode = 'pause';
       } else {
+        unlockSound(); // browsers only allow sound after a tap
         if (resumedAt === null) resumedAt = now();
-        if (card.mode !== 'pause') card.workedMs = 0;
+        if (card.mode !== 'pause') {
+          card.workedMs = 0;
+          card.goalHit = false;
+        }
         card.runningSince = now();
         card.restEndsAt = null;
         card.mode = 'run';
         persist();
       }
     } else if (action === 'stop' && (card.mode === 'run' || card.mode === 'pause')) {
-      card.sets.push({ ...card.next });
+      // A timed set is as long as the clock says, at least one second.
+      const reps = isTimed(card.ex) ? Math.max(1, Math.round(worked(card) / 1000)) : card.next.reps;
+      card.sets.push({ ...card.next, reps });
       card.workedMs = 0;
       card.runningSince = null;
       card.restEndsAt = now() + card.restSec * 1000;
@@ -312,7 +342,7 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
               'div',
               { class: 'reel-quick' },
               nextChip(card, weight, (d) => (card.next.weightKg = stepWeight(card.next.weightKg, d)), ['Less weight', 'More weight']),
-              nextChip(card, reps, (d) => (card.next.reps = stepReps(card.next.reps, d)), ['Fewer reps', 'More reps']),
+              nextChip(card, reps, (d) => (card.next.reps = stepAmount(ex, card.next.reps, d, MAX_TARGET_SECONDS)), isTimed(ex) ? ['Shorter goal time', 'Longer goal time'] : ['Fewer reps', 'More reps']),
             ),
             h('div', { class: 'reel-controls' }, stop, main, skip),
             h('div', { class: 'reel-hints' }, howTo, h('span', {}, next ? `Next: ${next.ex.name} ↑` : 'Swipe up to finish ↑')),
@@ -352,7 +382,7 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
     r.label.textContent = { idle: `Set ${n + 1} · ready`, run: `Set ${n + 1} · working`, pause: `Set ${n + 1} · paused`, rest: 'Rest' }[card.mode];
     paintClock(card);
     r.weight.textContent = weightText(card.ex, card.next.weightKg);
-    r.reps.textContent = `${card.next.reps} reps`;
+    r.reps.textContent = isTimed(card.ex) ? `Goal ${amountText(card.ex, card.next.reps)}` : amountText(card.ex, card.next.reps);
     r.main.replaceChildren(icon(card.mode === 'run' ? 'pause' : 'play'));
     r.main.setAttribute('aria-label', `${card.mode === 'run' ? 'Pause' : 'Start'} set of ${card.ex.name}`);
     r.stop.disabled = !(card.mode === 'run' || card.mode === 'pause');
@@ -411,6 +441,8 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
 
   const feed = h('div', { class: 'reel-feed' }, ...cards.map(buildPage), summary);
   const root = h('main', { class: `reel${ctx.animate() ? '' : ' no-motion'}` }, h('div', { class: 'reel-top' }, close, elapsed, bars), feed, scrim, sheet);
+  // Any tap restarts sound the phone paused (earphones connected, music started).
+  root.addEventListener('pointerdown', unlockSound, { passive: true });
   cards.forEach(paint);
   paintSummary();
   if (resumedAt !== null) persist();
@@ -516,20 +548,32 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
   window.addEventListener('pagehide', pause);
   window.addEventListener('pageshow', onPageShow);
 
+  /** How soon before an alert the earphones are woken (see keepSoundAwake). */
+  const WAKE_MS = 1500;
   const tick = setInterval(() => {
     if (!root.isConnected) return stopAll();
     paintElapsed();
     for (const c of cards) {
-      if (c.mode === 'run' || c.mode === 'pause') paintClock(c);
+      // An alert is coming up: wake Bluetooth earphones so the beep is not cut off.
+      const goalIn = c.mode === 'run' && isTimed(c.ex) && !c.goalHit ? c.next.reps * 1000 - worked(c) : Infinity;
+      const restIn = c.mode === 'rest' ? (c.restEndsAt ?? 0) - now() : Infinity;
+      if (Math.min(goalIn, restIn) <= WAKE_MS) keepSoundAwake();
+      if (c.mode === 'run' || c.mode === 'pause') {
+        paintClock(c);
+        if (c.mode === 'run' && isTimed(c.ex) && !c.goalHit && worked(c) >= c.next.reps * 1000) {
+          c.goalHit = true;
+          ctx.toast(c === cards[current] ? 'Goal time reached. Tap ■ to log the set.' : `${c.ex.name}: goal time reached.`);
+          alertUser([150, 100, 150]);
+        }
+      }
       else if (c.mode === 'rest') {
         if ((c.restEndsAt ?? 0) <= now()) {
           c.mode = 'idle';
           c.restEndsAt = null;
           paint(c);
-          if (c === cards[current]) {
-            ctx.toast('Rest is over. Start your next set.');
-            navigator.vibrate?.(200);
-          }
+          // Alert even when another exercise is on screen, naming the one that is ready.
+          ctx.toast(c === cards[current] ? 'Rest is over. Start your next set.' : `Rest is over for ${c.ex.name}.`);
+          alertUser(200);
         } else paintClock(c);
       }
     }

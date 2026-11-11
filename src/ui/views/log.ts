@@ -3,7 +3,7 @@ import { randomId } from '../../core/encoding';
 import { clampNumber, cleanText, MAX_NOTES, MAX_WEIGHT_KG } from '../../core/state';
 import type { LoggedExercise, PlannedExercise, WorkoutLog } from '../../core/types';
 import { fromDisplayWeight, round, toDisplayWeight } from '../../core/units';
-import { CORE_EXERCISES, EXERCISES, getExercise } from '../../data/exercises';
+import { CORE_EXERCISES, EXERCISES, getExercise, isTimed } from '../../data/exercises';
 import type { ViewContext } from '../context';
 import { clear, h, stepper } from '../dom';
 import { renderDemo } from '../demo';
@@ -141,9 +141,11 @@ export function renderLogForm(ctx: ViewContext, dayId: string): HTMLElement {
       if (!ex) return;
       const name = ex.name;
       const last = lastWeight(state.workouts, entry.exerciseId);
-      const repsHint = entry.target ? (entry.target.repsMin === entry.target.repsMax ? String(entry.target.repsMin) : `${entry.target.repsMin}–${entry.target.repsMax}`) : 'reps';
+      const timed = isTimed(ex);
+      const unit = timed ? 'seconds' : 'reps';
+      const repsHint = entry.target ? (entry.target.repsMin === entry.target.repsMax ? String(entry.target.repsMin) : `${entry.target.repsMin}–${entry.target.repsMax}`) : timed ? 'sec' : 'reps';
       const rows = entry.sets.map((set, si) => {
-        const reps = h('input', { type: 'number', min: 0, max: 1000, step: 1, value: set.reps ?? '', placeholder: repsHint, inputmode: 'numeric', 'aria-label': `${name} set ${si + 1} reps`, class: 'num' });
+        const reps = h('input', { type: 'number', min: 0, max: 1000, step: 1, value: set.reps ?? '', placeholder: repsHint, inputmode: 'numeric', 'aria-label': `${name} set ${si + 1} ${unit}`, class: 'num' });
         const readReps = () => (set.reps = reps.value === '' ? null : Math.round(clampNumber(reps.value, 0, 1000, 0)));
         reps.addEventListener('input', readReps); // while typing, so a draft is never behind
         reps.addEventListener('change', readReps);
@@ -198,7 +200,7 @@ export function renderLogForm(ctx: ViewContext, dayId: string): HTMLElement {
             h('div', {}, h('h2', {}, name), entry.target ? h('p', { class: 'muted' }, `Target: ${prescriptionText(entry.target)}`) : null),
           ),
           details,
-          h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Set'), h('th', {}, 'Reps'), h('th', {}, `Weight (${units})`), h('th', {}, h('span', { class: 'sr-only' }, 'Remove')))), h('tbody', {}, ...rows)),
+          h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Set'), h('th', {}, timed ? 'Seconds' : 'Reps'), h('th', {}, `Weight (${units})`), h('th', {}, h('span', { class: 'sr-only' }, 'Remove')))), h('tbody', {}, ...rows)),
           h('div', { class: 'row' }, addSet, removeEx),
         ),
       );
@@ -251,7 +253,7 @@ export function renderLogForm(ctx: ViewContext, dayId: string): HTMLElement {
     ev.preventDefault();
     const logged = draftToEntries(entries);
     if (!isISODate(date.value) || date.value > ctx.today()) return void (error.textContent = 'Please choose a valid date (not in the future).');
-    if (!logged.length) return void (error.textContent = 'Enter the reps for at least one set before saving.');
+    if (!logged.length) return void (error.textContent = 'Enter the reps (or seconds) for at least one set before saving.');
     save.disabled = true;
     const log: WorkoutLog = {
       id: randomId(8),

@@ -1,5 +1,5 @@
 /** Progress statistics derived from workout and body-weight logs. */
-import { getExercise } from '../data/exercises';
+import { getExercise, isTimed } from '../data/exercises';
 import { addDays, daysBetween, startOfWeek } from './dates';
 import type { BodyLog, LoggedExercise, LoggedSet, MuscleGroup, WorkoutLog } from './types';
 
@@ -10,7 +10,9 @@ export function estimateOneRepMax(set: LoggedSet): number {
   return set.weightKg * (1 + set.reps / 30);
 }
 
+/** Weight × reps; timed exercises (seconds, not reps) add no volume. */
 export function entryVolume(entry: LoggedExercise): number {
+  if (isTimed(getExercise(entry.exerciseId))) return 0;
   return entry.sets.reduce((sum, s) => sum + s.reps * s.weightKg, 0);
 }
 
@@ -18,8 +20,9 @@ export function workoutVolume(log: WorkoutLog): number {
   return log.entries.reduce((sum, e) => sum + entryVolume(e), 0);
 }
 
+/** Reps across the workout; timed exercises are left out (their sets hold seconds). */
 export function totalReps(log: WorkoutLog): number {
-  return log.entries.reduce((sum, e) => sum + e.sets.reduce((s, x) => s + x.reps, 0), 0);
+  return log.entries.reduce((sum, e) => (isTimed(getExercise(e.exerciseId)) ? sum : sum + e.sets.reduce((s, x) => s + x.reps, 0)), 0);
 }
 
 export interface PersonalRecord {
@@ -34,10 +37,12 @@ export function personalRecords(workouts: readonly WorkoutLog[]): PersonalRecord
   const prs = new Map<string, PersonalRecord>();
   for (const w of [...workouts].sort((a, b) => a.date.localeCompare(b.date))) {
     for (const e of w.entries) {
+      // For a timed exercise the record is the longest set (bestReps holds seconds), not a 1RM.
+      const timed = isTimed(getExercise(e.exerciseId));
       for (const s of e.sets) {
         if (s.reps <= 0) continue;
         const cur = prs.get(e.exerciseId) ?? { exerciseId: e.exerciseId, bestWeightKg: 0, bestReps: 0, bestOneRepMax: 0, date: w.date };
-        const orm = estimateOneRepMax(s);
+        const orm = timed ? 0 : estimateOneRepMax(s);
         if (orm > cur.bestOneRepMax || (orm === cur.bestOneRepMax && s.reps > cur.bestReps)) cur.date = w.date;
         cur.bestWeightKg = Math.max(cur.bestWeightKg, s.weightKg);
         cur.bestReps = Math.max(cur.bestReps, s.reps);
@@ -54,11 +59,11 @@ export interface SeriesPoint {
   value: number;
 }
 
-/** Per-workout progress for one exercise: estimated 1RM if weighted, otherwise best reps. */
+/** Per-workout progress for one exercise: estimated 1RM if weighted, otherwise best reps (or longest set if timed). */
 export function exerciseSeries(workouts: readonly WorkoutLog[], exerciseId: string): SeriesPoint[] {
   const points: SeriesPoint[] = [];
   const sorted = [...workouts].sort((a, b) => a.date.localeCompare(b.date));
-  const weighted = sorted.some((w) => w.entries.some((e) => e.exerciseId === exerciseId && e.sets.some((s) => s.weightKg > 0)));
+  const weighted = !isTimed(getExercise(exerciseId)) && sorted.some((w) => w.entries.some((e) => e.exerciseId === exerciseId && e.sets.some((s) => s.weightKg > 0)));
   for (const w of sorted) {
     const sets = w.entries.filter((e) => e.exerciseId === exerciseId).flatMap((e) => e.sets);
     if (!sets.length) continue;

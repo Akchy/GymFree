@@ -2,6 +2,7 @@ import { sanitizeState } from '../../core/state';
 import type { SyncStatus } from '../../core/sync';
 import type { ViewContext } from '../context';
 import { choiceGroup, field, h } from '../dom';
+import { canVibrate, getSounds, previewSound, setSounds } from '../alerts';
 import { getTheme, setTheme } from '../theme';
 
 export const MAX_BACKUP_BYTES = 10 * 1024 * 1024;
@@ -139,6 +140,11 @@ function preferencesCard(ctx: ViewContext): HTMLElement {
     value: getTheme(),
     onChange: (v) => setTheme(v),
   });
+  const sounds = h('input', { type: 'checkbox', id: 'sounds', checked: getSounds() });
+  sounds.addEventListener('change', () => {
+    setSounds(sounds.checked);
+    if (sounds.checked) previewSound();
+  });
   const animations = h('input', { type: 'checkbox', id: 'animations', checked: state.settings.animations });
   animations.addEventListener('change', () => ctx.update((s) => (s.settings.animations = animations.checked), { render: false }));
   return h(
@@ -148,6 +154,8 @@ function preferencesCard(ctx: ViewContext): HTMLElement {
     theme,
     units,
     h('div', { class: 'field inline' }, animations, h('label', { for: 'animations' }, 'Animated exercise demos (off = start/end images)')),
+    h('div', { class: 'field inline' }, sounds, h('label', { for: 'sounds' }, 'Sound alerts in workout mode (rest over, goal time reached)')),
+    h('p', { class: 'muted' }, canVibrate() ? 'This device also vibrates for these alerts.' : 'This device can’t vibrate from a web page, so sound is the only alert.'),
     h('a', { href: '#/onboarding', class: 'button secondary' }, 'Change goal & routine'),
   );
 }

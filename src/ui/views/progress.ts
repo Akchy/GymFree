@@ -5,6 +5,7 @@ import {
   loggedExerciseIds,
   muscleGroupCounts,
   personalRecords,
+  type PersonalRecord,
   weekStreak,
   weightChange,
   workoutVolume,
@@ -13,7 +14,7 @@ import {
 import { clampNumber } from '../../core/state';
 import type { MuscleGroup } from '../../core/types';
 import { formatWeight, fromDisplayWeight, round, toDisplayWeight } from '../../core/units';
-import { getExercise } from '../../data/exercises';
+import { amountText, getExercise, isTimed } from '../../data/exercises';
 import { createBatches } from '../batches';
 import { lineChart } from '../chart';
 import type { ViewContext } from '../context';
@@ -36,9 +37,9 @@ export function renderProgress(ctx: ViewContext): HTMLElement {
   const exSel = h('select', { 'aria-label': 'Exercise to chart' }, ...ids.map((id) => h('option', { value: id }, getExercise(id)?.name ?? id)));
   const drawChart = () => {
     const ex = getExercise(exSel.value);
-    const weighted = state.workouts.some((w) => w.entries.some((e) => e.exerciseId === exSel.value && e.sets.some((s) => s.weightKg > 0)));
+    const weighted = !isTimed(ex) && state.workouts.some((w) => w.entries.some((e) => e.exerciseId === exSel.value && e.sets.some((s) => s.weightKg > 0)));
     const series = exerciseSeries(state.workouts, exSel.value).map((p) => (weighted ? { ...p, value: toDisplayWeight(p.value, units) } : p));
-    chartBox.replaceChildren(lineChart(series, `${ex?.name} progress`, weighted ? ` ${units} (est. 1RM)` : ' reps'));
+    chartBox.replaceChildren(lineChart(series, `${ex?.name} progress`, weighted ? ` ${units} (est. 1RM)` : isTimed(ex) ? ' s' : ' reps'));
   };
   exSel.addEventListener('change', drawChart);
   if (ids.length) drawChart();
@@ -70,6 +71,11 @@ export function renderProgress(ctx: ViewContext): HTMLElement {
   const counts = muscleGroupCounts(state.workouts, today);
   const maxCount = Math.max(1, ...Object.values(counts));
   const prs = personalRecords(state.workouts).slice(0, 10);
+  const recordText = (p: PersonalRecord) => {
+    const ex = getExercise(p.exerciseId);
+    if (isTimed(ex)) return amountText(ex, p.bestReps);
+    return p.bestWeightKg > 0 ? `${formatWeight(p.bestWeightKg, units)} (est. 1RM ${formatWeight(p.bestOneRepMax, units)})` : `${p.bestReps} reps`;
+  };
 
   const history = [...state.workouts].sort((a, b) => b.date.localeCompare(a.date));
   const historyRow = (w: WorkoutLog) => {
@@ -109,7 +115,7 @@ export function renderProgress(ctx: ViewContext): HTMLElement {
           h(
             'ul',
             { class: 'compact' },
-            ...prs.map((p) => h('li', {}, h('strong', {}, getExercise(p.exerciseId)?.name ?? p.exerciseId), ': ', p.bestWeightKg > 0 ? `${formatWeight(p.bestWeightKg, units)} (est. 1RM ${formatWeight(p.bestOneRepMax, units)})` : `${p.bestReps} reps`, h('span', { class: 'muted' }, ` · ${p.date}`))),
+            ...prs.map((p) => h('li', {}, h('strong', {}, getExercise(p.exerciseId)?.name ?? p.exerciseId), ': ', recordText(p), h('span', { class: 'muted' }, ` · ${p.date}`))),
           ),
         )
       : null,

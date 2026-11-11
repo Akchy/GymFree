@@ -3,7 +3,7 @@
  * backup goes through sanitizeState(), so malformed or tampered data cannot inject
  * unexpected shapes into the app.
  */
-import { getExercise } from '../data/exercises';
+import { type Exercise, getExercise, isTimed } from '../data/exercises';
 import { isISODate } from './dates';
 import {
   ACTIVITY_LEVELS,
@@ -92,14 +92,22 @@ function weekdays(v: unknown): Weekday[] {
   return [...new Set(v.filter((x): x is Weekday => Number.isInteger(x) && x >= 0 && x <= 6))].sort((a, b) => a - b);
 }
 
+/** Highest planned target: reps, or seconds for a timed exercise. */
+export const MAX_TARGET_REPS = 100;
+export const MAX_TARGET_SECONDS = 600;
+export function maxTarget(ex: Exercise | undefined): number {
+  return isTimed(ex) ? MAX_TARGET_SECONDS : MAX_TARGET_REPS;
+}
+
 function plannedExercise(v: unknown): PlannedExercise | null {
   if (!isObj(v) || typeof v.exerciseId !== 'string' || !getExercise(v.exerciseId)) return null;
-  const repsMin = Math.round(clampNumber(v.repsMin, 1, 100, 8));
+  const max = maxTarget(getExercise(v.exerciseId));
+  const repsMin = Math.round(clampNumber(v.repsMin, 1, max, 8));
   return {
     exerciseId: v.exerciseId,
     sets: Math.round(clampNumber(v.sets, 1, 10, 3)),
     repsMin,
-    repsMax: Math.max(repsMin, Math.round(clampNumber(v.repsMax, 1, 100, 12))),
+    repsMax: Math.max(repsMin, Math.round(clampNumber(v.repsMax, 1, max, 12))),
     restSec: Math.round(clampNumber(v.restSec, 0, 600, 60)),
   };
 }

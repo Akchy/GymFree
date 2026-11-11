@@ -81,6 +81,18 @@ describe('sanitizeState', () => {
     expect(s.plan[0].exercises).toEqual([{ exerciseId: 'push-up', sets: 10, repsMin: 12, repsMax: 12, restSec: 0 }]);
   });
 
+  it('keeps long targets for timed exercises (seconds), but caps reps at 100', () => {
+    const s = sanitizeState({
+      version: 1,
+      plan: [{ id: 'd1', name: 'Core', exercises: [
+        { exerciseId: 'plank', sets: 3, repsMin: 90, repsMax: 120, restSec: 30 },
+        { exerciseId: 'push-up', sets: 3, repsMin: 90, repsMax: 120, restSec: 30 },
+        { exerciseId: 'side-plank', sets: 3, repsMin: 30, repsMax: 9999, restSec: 30 },
+      ] }],
+    });
+    expect(s.plan[0].exercises.map((e) => [e.repsMin, e.repsMax])).toEqual([[90, 120], [90, 100], [30, 600]]);
+  });
+
   it('validates workouts and dedupes body logs by date', () => {
     const s = sanitizeState({
       version: 1,
