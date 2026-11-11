@@ -240,6 +240,48 @@ describe('workout mode', () => {
     expect(pages()[0].textContent).toContain('No sets yet');
   });
 
+  const continueDraft = (editingId: string) => {
+    const exId = day().exercises[0].exerciseId;
+    app['repo'].setDraft(day().id, { editingId, date: '2026-10-27', durationMin: null, notes: 'n', entries: [{ exerciseId: exId, sets: [{ reps: 5, weightKg: 0 }] }], activeMs: 10 * 60_000, resumedAt: null });
+    return exId;
+  };
+  const saveWorkoutMode = async () => {
+    byText(root.querySelector('.reel-summary') as HTMLElement, 'button', 'Save workout').click();
+    await settle(app);
+  };
+
+  it('a draft with editingId updates that workout and keeps editingId while logging', async () => {
+    const exId = continueDraft('w1');
+    await app['context']().update((s) => {
+      s.workouts = [{ id: 'w1', date: '2026-10-27', dayId: day().id, entries: [{ exerciseId: exId, sets: [{ reps: 5, weightKg: 0 }] }], durationMin: 10, notes: 'n' }];
+    });
+    await go(app, `/workout/${day().id}`);
+    doSet(pages()[0], 30);
+    expect((app['repo'].draft(day().id) as { editingId?: string }).editingId).toBe('w1');
+    await saveWorkoutMode();
+    const ws = state().workouts;
+    expect(ws).toHaveLength(1);
+    expect(ws[0].id).toBe('w1');
+    expect(ws[0].entries[0].sets).toHaveLength(2);
+    expect(ws[0].durationMin).toBeGreaterThanOrEqual(10);
+    expect(ws[0].updatedAt).toEqual(expect.any(String));
+    expect(window.location.hash).toBe('#/history');
+  });
+
+  it('a draft whose workout was deleted saves as a new workout, never resurrecting the id', async () => {
+    continueDraft('w1');
+    await app['context']().update((s) => {
+      s.workouts = [];
+      s.deletedWorkoutIds = ['w1'];
+    });
+    await go(app, `/workout/${day().id}`);
+    await saveWorkoutMode();
+    const ws = state().workouts;
+    expect(ws).toHaveLength(1);
+    expect(ws[0].id).not.toBe('w1');
+    expect(ws.some((w) => w.id === 'w1')).toBe(false);
+  });
+
   it('is only offered on phones; other devices get the list view', async () => {
     const id = day().id;
     expect(byText(root, 'a', 'Start workout').getAttribute('href')).toBe(`#/workout/${id}`);

@@ -220,7 +220,14 @@ export function renderLogForm(ctx: ViewContext, dayId: string): HTMLElement {
       durationMin: durationManual && duration.value !== '' ? Math.round(clampNumber(duration.value, 0, 600, 0)) : clockMs() > 0 ? clockMinutes() : null,
       notes: cleanText(notes.value, MAX_NOTES),
     };
-    await ctx.update((s) => upsertWorkout(s, log, new Date().toISOString()), { render: false });
+    await ctx.update(
+      (s) => {
+        // A workout deleted meanwhile is never brought back: the sets are saved as a new one.
+        const gone = !!restored?.editingId && (!s.workouts.some((w) => w.id === log.id) || s.deletedWorkoutIds.includes(log.id));
+        upsertWorkout(s, gone ? { ...log, id: randomId(8) } : log, new Date().toISOString());
+      },
+      { render: false },
+    );
     ctx.repo.setDraft(dayId, null);
     ctx.toast('Workout saved. Nice job!');
     ctx.navigate('/history');

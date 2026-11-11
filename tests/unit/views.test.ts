@@ -7,6 +7,8 @@ import type { AppState, PlanDay } from '../../src/core/types';
 import { WEEKDAY_NAMES } from '../../src/core/types';
 import { nextPlanDay, renderDashboard } from '../../src/ui/views/dashboard';
 import { draftToEntries, lastWeight, readDraft } from '../../src/ui/views/log';
+import { canContinue, workoutToDraft } from '../../src/ui/views/history';
+import { PHONE_QUERY } from '../../src/ui/device';
 import { prescriptionText } from '../../src/ui/views/plan';
 import { backupFileName, MAX_BACKUP_BYTES, renderSettings, syncStatusText } from '../../src/ui/views/settings';
 import type { InstallManager } from '../../src/pwa/register';
@@ -615,6 +617,19 @@ describe('workout logging', () => {
     expect(window.location.hash).toBe('#/history');
   });
 
+  it('a draft whose workout no longer exists saves as a new workout', async () => {
+    const s = onboardedState();
+    s.deletedWorkoutIds = ['w1'];
+    const { app: a2, root: r2, repo } = await makeApp(s);
+    repo.setDraft('free', { editingId: 'w1', date: '2026-10-20', durationMin: 30, notes: '', entries: [{ exerciseId: 'plank', sets: [{ reps: 1, weightKg: null, seconds: 40 }] }], activeMs: 0, resumedAt: null });
+    await go(a2, '/log/free');
+    r2.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    await settle(a2);
+    const ws = a2.currentState!.workouts;
+    expect(ws).toHaveLength(1);
+    expect(ws[0].id).not.toBe('w1');
+  });
+
   it('keeps editingId in rewritten drafts', async () => {
     const s = onboardedState();
     s.workouts.push({ id: 'w1', date: '2026-10-20', dayId: null, entries: [{ exerciseId: 'push-up', sets: [{ reps: 3, weightKg: 0 }] }], durationMin: null, notes: '' });
@@ -871,6 +886,81 @@ describe('workout detail and edit', () => {
     expect(w.notes).toBe('Felt strong');
     expect(w.dayId).toBe(state().plan[0].id);
     expect(window.location.hash).toBe('#/history/w1');
+  });
+
+  it('saving an edit of a workout deleted meanwhile adds a new workout, not the old id', async () => {
+    await seed();
+    await go(app, '/history/w1/edit');
+    await app['context']().update((s) => {
+      s.workouts = s.workouts.filter((w) => w.id !== 'w1');
+      s.deletedWorkoutIds.push('w1');
+    }, { render: false });
+    await submit();
+    const ids = state().workouts.map((w) => w.id);
+    expect(ids).toHaveLength(2);
+    expect(ids).not.toContain('w1');
+    expect(ids).toContain('w2');
+  });
+
+  describe('continue this workout', () => {
+    const today = '2026-10-27';
+    const mk = (over: Partial<import('../../src/core/types').WorkoutLog> = {}) => {
+      const d = state().plan[0];
+      return { id: 'c1', date: today, dayId: d.id, entries: [ex(d.exercises[0].exerciseId, [{ reps: 5, weightKg: 0 }])], durationMin: 12, notes: 'n', ...over };
+    };
+    const phone = (on: boolean) => {
+      window.matchMedia = vi.fn((q: string) => ({ matches: q === PHONE_QUERY && on })) as unknown as typeof window.matchMedia;
+    };
+    afterEach(() => {
+      vi.restoreAllMocks();
+      window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    });
+
+    it('canContinue: only today, a plan day, and exercises still in the day', () => {
+      const plan = state().plan;
+      expect(canContinue(mk(), plan, today)).toBe(true);
+      expect(canContinue(mk({ date: '2026-10-26' }), plan, today)).toBe(false);
+      expect(canContinue(mk({ dayId: null }), plan, today)).toBe(false);
+      expect(canContinue(mk({ dayId: 'gone' }), plan, today)).toBe(false);
+      expect(canContinue(mk({ entries: [ex('not-in-day', [{ reps: 1, weightKg: 0 }])] }), plan, today)).toBe(false);
+    });
+
+    it('workoutToDraft carries the workout and its id', () => {
+      expect(workoutToDraft(mk())).toMatchObject({ date: today, durationMin: null, notes: 'n', activeMs: 720_000, resumedAt: null, editingId: 'c1' });
+    });
+
+    it('shows the button only on a phone and only when continuable', async () => {
+      await app['context']().update((s) => {
+        s.workouts = [mk(), mk({ id: 'c2', date: '2026-10-20' })];
+      });
+      phone(true);
+      await go(app, '/history/c1');
+      expect(root.textContent).toContain('Continue this workout');
+      await go(app, '/history/c2');
+      expect(root.textContent).not.toContain('Continue this workout');
+      phone(false);
+      await go(app, '/history/c1');
+      expect(root.textContent).not.toContain('Continue this workout');
+    });
+
+    it('asks before replacing another unsaved session, then opens workout mode', async () => {
+      await app['context']().update((s) => {
+        s.workouts = [mk()];
+      });
+      phone(true);
+      const dayId = state().plan[0].id;
+      app['repo'].setDraft(dayId, { entries: [], date: '', durationMin: null, notes: 'other', activeMs: 0, resumedAt: null });
+      await go(app, '/history/c1');
+      const spy = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+      byText(root, 'button.primary', 'Continue this workout').click();
+      await settle(app);
+      expect(spy).toHaveBeenCalledWith('Replace your unsaved session for this day?');
+      expect((app['repo'].draft(dayId) as { notes: string }).notes).toBe('other');
+      byText(root, 'button.primary', 'Continue this workout').click();
+      await settle(app);
+      expect((app['repo'].draft(dayId) as { editingId: string }).editingId).toBe('c1');
+      expect(window.location.hash).toBe(`#/workout/${dayId}`);
+    });
   });
 
   it('Cancel links back to the detail page and leaves the workout unchanged', async () => {

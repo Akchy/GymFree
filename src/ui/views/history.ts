@@ -1,16 +1,18 @@
+import { randomId } from '../../core/encoding';
 import { isISODate, parseISODate } from '../../core/dates';
 import { groupByWeek, removeWorkout, upsertWorkout } from '../../core/history';
 import { workoutVolume } from '../../core/progress';
 import { clampNumber, cleanText, MAX_NOTES } from '../../core/state';
-import type { WorkoutLog } from '../../core/types';
+import type { PlanDay, WorkoutLog } from '../../core/types';
 import { toDisplayWeight, formatWeight } from '../../core/units';
 import { amountText, getExercise, isTimed } from '../../data/exercises';
 import { createBatches } from '../batches';
 import type { ViewContext } from '../context';
+import { isPhone } from '../device';
 import { h } from '../dom';
 import { numberWheel } from '../number-wheel';
 import { renderSetEditor, type DraftEntry } from '../set-editor';
-import { draftToEntries } from './log';
+import { draftToEntries, type WorkoutDraft } from './log';
 import { renderNotFound } from './notfound';
 import { renderStats } from './progress';
 
@@ -101,6 +103,17 @@ export function renderWorkoutDetail(ctx: ViewContext, id: string): HTMLElement {
       .join(' · ');
     return h('li', { class: 'detail-exercise' }, h('strong', {}, ex?.name ?? e.exerciseId), h('span', {}, weighted ? `${text} ${units}` : text));
   };
+  const dayId = w.dayId;
+  let resume: HTMLButtonElement | null = null;
+  if (dayId && isPhone() && canContinue(w, ctx.state.plan, ctx.today())) {
+    resume = h('button', { type: 'button', class: 'primary' }, 'Continue this workout');
+    resume.addEventListener('click', () => {
+      const existing = ctx.repo.draft(dayId) as { editingId?: unknown } | null;
+      if (ctx.repo.hasDraft(dayId) && existing?.editingId !== w.id && !confirm('Replace your unsaved session for this day?')) return;
+      ctx.repo.setDraft(dayId, workoutToDraft(w));
+      ctx.navigate(`/workout/${dayId}`);
+    });
+  }
   return h(
     'main',
     { class: 'container' },
@@ -110,7 +123,28 @@ export function renderWorkoutDetail(ctx: ViewContext, id: string): HTMLElement {
     h('div', { class: 'chips' }, ...[plural(w.entries.length, 'exercise'), plural(sets, 'set'), formatWeight(workoutVolume(w), units)].map((t) => h('span', { class: 'chip' }, t))),
     h('ul', { class: 'detail-list' }, ...w.entries.map(line)),
     w.notes ? h('p', { class: 'detail-notes' }, w.notes) : null,
+    resume,
   );
+}
+
+/** Today's workout of a plan day whose exercises are all still in that day: workout mode can pick it up again. */
+export function canContinue(log: WorkoutLog, plan: readonly PlanDay[], today: string): boolean {
+  if (log.date !== today || log.dayId === null) return false;
+  const day = plan.find((d) => d.id === log.dayId);
+  return !!day && log.entries.every((e) => day.exercises.some((pe) => pe.exerciseId === e.exerciseId));
+}
+
+/** The workout as a draft that workout mode can carry on and save over the same workout. */
+export function workoutToDraft(log: WorkoutLog): WorkoutDraft {
+  return {
+    entries: structuredClone(log.entries),
+    date: log.date,
+    durationMin: null,
+    notes: log.notes,
+    activeMs: (log.durationMin ?? 0) * 60_000,
+    resumedAt: null,
+    editingId: log.id,
+  };
 }
 
 /** Edit a past workout: the same wheels as the entry screen, on a copy that is only saved on Save. */
@@ -155,7 +189,14 @@ export function renderWorkoutEdit(ctx: ViewContext, id: string): HTMLElement {
       durationMin: duration.value !== '' ? Math.round(clampNumber(duration.value, 0, 600, 0)) : null,
       notes: cleanText(notes.value, MAX_NOTES),
     };
-    await ctx.update((s) => upsertWorkout(s, log, new Date().toISOString()), { render: false });
+    await ctx.update(
+      (s) => {
+        // A workout deleted meanwhile is never brought back: the edit is saved as a new one.
+        const gone = !s.workouts.some((x) => x.id === log.id) || s.deletedWorkoutIds.includes(log.id);
+        upsertWorkout(s, gone ? { ...log, id: randomId(8) } : log, new Date().toISOString());
+      },
+      { render: false },
+    );
     ctx.toast('Workout updated.');
     ctx.navigate(back.slice(1));
   });
