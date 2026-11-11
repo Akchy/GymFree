@@ -1,6 +1,6 @@
-import { isISODate, weekdayOf } from '../../core/dates';
+import { isISODate } from '../../core/dates';
 import { randomId } from '../../core/encoding';
-import { clampNumber, cleanText, MAX_NOTES, MAX_WEIGHT_KG, setSeconds } from '../../core/state';
+import { clampNumber, cleanId, cleanText, MAX_NOTES, MAX_WEIGHT_KG, setSeconds } from '../../core/state';
 import type { LoggedExercise, LoggedSet, WorkoutLog } from '../../core/types';
 import { getExercise } from '../../data/exercises';
 import type { ViewContext } from '../context';
@@ -8,7 +8,8 @@ import { h } from '../dom';
 import { numberWheel } from '../number-wheel';
 import { renderSetEditor, type DraftEntry, type DraftSet } from '../set-editor';
 import { isPhone } from '../device';
-import { dayLabel, orderedDays } from './plan';
+import { upsertWorkout } from '../../core/history';
+import { dayLabel } from './plan';
 
 export { lastWeight } from '../set-editor';
 
@@ -22,35 +23,6 @@ function clockText(ms: number): string {
   return s < 3600 ? `${pad(Math.floor(s / 60))}:${pad(s % 60)}` : `${Math.floor(s / 3600)}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`;
 }
 
-function inProgress(ctx: ViewContext, dayId: string): HTMLElement | null {
-  return ctx.repo.hasDraft(dayId) ? h('span', { class: 'badge in-progress' }, 'Unsaved workout in progress') : null;
-}
-
-export function renderLogPicker(ctx: ViewContext): HTMLElement {
-  const today = weekdayOf(ctx.today());
-  return h(
-    'main',
-    { class: 'container' },
-    h('h1', {}, 'Log a workout'),
-    h('p', { class: 'muted' }, 'Pick a day from your plan, or start a free workout.'),
-    h(
-      'div',
-      { class: 'stack' },
-      // Named by weekday ("Monday"), with the session name under it, in week order.
-      ...orderedDays(ctx.state.plan).map((d) =>
-        h(
-          'a',
-          { href: `#/log/${d.id}`, class: `card link-card${d.weekday === today ? ' today' : ''}` },
-          h('strong', {}, dayLabel(d), d.weekday === today ? h('span', { class: 'badge' }, 'Today') : null),
-          h('span', { class: 'muted' }, `${d.name} · ${d.exercises.length} exercises`),
-          inProgress(ctx, d.id),
-        ),
-      ),
-      h('a', { href: '#/log/free', class: 'card link-card' }, h('strong', {}, 'Free workout'), h('span', { class: 'muted' }, 'Choose exercises as you go'), inProgress(ctx, 'free')),
-    ),
-  );
-}
-
 /** A workout being filled in, kept on the device until it is saved or discarded. */
 export interface WorkoutDraft {
   entries: { exerciseId: string; sets: DraftSet[] }[];
@@ -60,6 +32,8 @@ export interface WorkoutDraft {
   /** Workout mode's clock: time spent in it so far, and when the current visit began (ms). */
   activeMs: number;
   resumedAt: number | null;
+  /** Set when the draft is an existing workout being edited: saving updates it instead of adding. */
+  editingId?: string;
 }
 
 const optionalNum = (v: unknown, max: number) => (typeof v === 'number' && Number.isFinite(v) ? clampNumber(v, 0, max, 0) : null);
@@ -81,7 +55,9 @@ export function readDraft(raw: unknown): WorkoutDraft | null {
     });
     return [{ exerciseId, sets: sets.length ? sets : [{ reps: null, weightKg: null }] }];
   });
+  const editingId = cleanId(d.editingId);
   return {
+    ...(editingId ? { editingId } : {}),
     entries,
     date: isISODate(d.date) ? d.date : '',
     durationMin: optionalNum(d.durationMin, 600),
@@ -171,6 +147,7 @@ export function renderLogForm(ctx: ViewContext, dayId: string): HTMLElement {
       activeMs > 0 ||
       resumedAt !== null;
     const draft: WorkoutDraft = {
+      ...(restored?.editingId ? { editingId: restored.editingId } : {}),
       entries: entries.map((e) => ({ exerciseId: e.exerciseId, sets: e.sets })),
       date: date.value,
       durationMin: durationManual && duration.value !== '' ? Number(duration.value) : null,
@@ -212,7 +189,6 @@ export function renderLogForm(ctx: ViewContext, dayId: string): HTMLElement {
     h('h1', { class: 'log-title' }, day ? [dayLabel(day), h('span', { class: 'day-title' }, day.name)] : 'Free workout'),
     day && isPhone() ? h('p', {}, h('a', { href: `#/workout/${day.id}` }, 'Switch to workout mode')) : null,
     restored ? h('p', { class: 'note-inline', role: 'status' }, 'Picked up your unsaved workout from earlier. ', discard) : null,
-    h('p', { class: 'muted' }, 'Fill in each set as you finish it. Grey numbers are your target and last weight. Empty sets are not saved.'),
     clockBox,
     h(
       'div',
@@ -236,7 +212,7 @@ export function renderLogForm(ctx: ViewContext, dayId: string): HTMLElement {
     if (!logged.length) return void (error.textContent = 'Enter the reps (or seconds) for at least one set before saving.');
     save.disabled = true;
     const log: WorkoutLog = {
-      id: randomId(8),
+      id: restored?.editingId ?? randomId(8),
       date: date.value,
       dayId: day?.id ?? null,
       entries: logged,
@@ -244,10 +220,10 @@ export function renderLogForm(ctx: ViewContext, dayId: string): HTMLElement {
       durationMin: durationManual && duration.value !== '' ? Math.round(clampNumber(duration.value, 0, 600, 0)) : clockMs() > 0 ? clockMinutes() : null,
       notes: cleanText(notes.value, MAX_NOTES),
     };
-    await ctx.update((s) => s.workouts.push(log), { render: false });
+    await ctx.update((s) => upsertWorkout(s, log, new Date().toISOString()), { render: false });
     ctx.repo.setDraft(dayId, null);
     ctx.toast('Workout saved. Nice job!');
-    ctx.navigate('/progress');
+    ctx.navigate('/history');
   });
   return h('main', {}, form);
 }

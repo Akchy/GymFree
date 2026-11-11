@@ -80,7 +80,7 @@ export function cleanText(v: unknown, max: number): string {
   return v.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').slice(0, max);
 }
 
-function cleanId(v: unknown): string | null {
+export function cleanId(v: unknown): string | null {
   return typeof v === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(v) ? v : null;
 }
 

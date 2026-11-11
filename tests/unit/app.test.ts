@@ -269,7 +269,6 @@ describe('App: everyday use', () => {
       ['/exercises/squat-typo', 'Exercise not found'],
       ['/exercises/push-up', 'Push-up'],
       ['/exercises/push-up?from=plan', 'Push-up'],
-      ['/log', 'Log a workout'],
       ['/log/free', 'Free workout'],
       ['/progress', 'Progress'],
       ['/settings', 'Settings'],
@@ -279,6 +278,13 @@ describe('App: everyday use', () => {
       await go(app, path);
       expect(root.querySelector('main h1')?.textContent, path).toBe(title);
     }
+  });
+
+  it('/log redirects home', async () => {
+    const { app, root } = await makeApp(onboardedState());
+    await go(app, '/log');
+    expect(window.location.hash).toBe('#/');
+    expect(root.querySelector('main')).toBeTruthy();
   });
 
   it('shows a toast when saving on the device fails', async () => {

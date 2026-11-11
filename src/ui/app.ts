@@ -15,7 +15,7 @@ import { prefersReducedMotion } from './figure';
 import { effectiveTheme, setTheme, THEME_EVENT } from './theme';
 import { renderDashboard } from './views/dashboard';
 import { renderExerciseDetail, renderExerciseList } from './views/exercises';
-import { renderLogForm, renderLogPicker } from './views/log';
+import { renderLogForm } from './views/log';
 import { renderNotFound } from './views/notfound';
 import { renderOnboarding } from './views/onboarding';
 import { renderDayEditor, renderPlan } from './views/plan';
@@ -396,7 +396,8 @@ export class App {
         view = param ? renderExerciseDetail(ctx, decodeURIComponent(param), from) : renderExerciseList(ctx);
         break;
       case 'log':
-        view = param ? renderLogForm(ctx, decodeURIComponent(param)) : renderLogPicker(ctx);
+        if (!param) return this.navigate('/');
+        view = renderLogForm(ctx, decodeURIComponent(param));
         break;
       case 'workout':
         // Workout mode is for phones; elsewhere (and for free workouts) the list view is used.

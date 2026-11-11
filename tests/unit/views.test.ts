@@ -414,19 +414,10 @@ describe('exercise library', () => {
 });
 
 describe('workout logging', () => {
-  it('lists plan days and a free workout option', async () => {
+  it('/log redirects home', async () => {
     await go(app, '/log');
-    expect(root.querySelectorAll('.link-card')).toHaveLength(4);
-  });
-
-  it('names plan days by weekday, in week order, with the session name below', async () => {
-    await go(app, '/log');
-    const scheduled = state().plan.filter((d) => d.weekday !== null).sort((a, b) => a.weekday! - b.weekday!);
-    const cards = [...root.querySelectorAll('.link-card')].slice(0, scheduled.length);
-    cards.forEach((card, i) => {
-      expect(card.querySelector('strong')?.textContent).toMatch(new RegExp(`^${WEEKDAY_NAMES[scheduled[i].weekday!]}`));
-      expect(card.textContent).toContain(scheduled[i].name);
-    });
+    expect(window.location.hash).toBe('#/');
+    expect(root.querySelector('.link-card')).toBeNull();
   });
 
   it('starts each exercise with one empty set and shows targets as hints', async () => {
@@ -484,8 +475,9 @@ describe('workout logging', () => {
     root.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
     await settle(app);
 
-    expect(window.location.hash).toBe('#/progress');
+    expect(window.location.hash).toBe('#/history');
     const log = state().workouts[0];
+    expect(typeof log.updatedAt).toBe('string');
     expect(log).toMatchObject({ date: '2026-10-27', dayId: day.id, durationMin: 50, notes: 'Felt strong' });
     expect(log.entries).toEqual([{ exerciseId: day.exercises[0].exerciseId, sets: [{ reps: 8, weightKg: 22.5 }, { reps: 6, weightKg: 0 }] }]);
 
@@ -535,9 +527,7 @@ describe('workout logging', () => {
     root.querySelector<HTMLTextAreaElement>('#log-notes')!.value = 'felt strong';
     root.querySelector('#log-notes')!.dispatchEvent(new Event('input', { bubbles: true }));
 
-    await go(app, '/log');
-    expect(byText(root, `a[href="#/log/${day.id}"]`, /Unsaved workout in progress/)).toBeTruthy();
-    expect(root.querySelector('a[href="#/log/free"] .in-progress')).toBeNull();
+    await go(app, '/');
 
     await go(app, `/log/${day.id}`);
     expect(root.textContent).toContain('Picked up your unsaved workout from earlier.');
@@ -569,6 +559,48 @@ describe('workout logging', () => {
     expect(root.textContent).not.toContain('Picked up');
   });
 
+  it('saving goes to History and stamps updatedAt', async () => {
+    await go(app, '/log/free');
+    change(root.querySelector<HTMLSelectElement>('select[aria-label="Add exercise"]')!, 'push-up');
+    change(root.querySelector<HTMLInputElement>('input[aria-label="Push-up set 1 reps"]')!, '5');
+    root.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    await settle(app);
+    expect(window.location.hash).toBe('#/history');
+    expect(state().workouts.at(-1)?.updatedAt).toEqual(expect.any(String));
+  });
+
+  it('a draft with editingId updates that workout instead of adding one', async () => {
+    const s = onboardedState();
+    s.workouts.push({ id: 'w1', date: '2026-10-20', dayId: null, entries: [{ exerciseId: 'push-up', sets: [{ reps: 3, weightKg: 0 }] }], durationMin: 30, notes: '' });
+    const { app: a2, root: r2, repo } = await makeApp(s);
+    repo.setDraft('free', { editingId: 'w1', date: '2026-10-20', durationMin: 30, notes: 'edited', entries: [{ exerciseId: 'plank', sets: [{ reps: 1, weightKg: null, seconds: 40 }] }], activeMs: 0, resumedAt: null });
+    await go(a2, '/log/free');
+    r2.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    await settle(a2);
+    const ws = a2.currentState!.workouts;
+    expect(ws).toHaveLength(1);
+    expect(ws[0]).toMatchObject({ id: 'w1', date: '2026-10-20', notes: 'edited' });
+    expect(ws[0].entries[0].exerciseId).toBe('plank');
+    expect(ws[0].updatedAt).toEqual(expect.any(String));
+    expect(window.location.hash).toBe('#/history');
+  });
+
+  it('keeps editingId in rewritten drafts', async () => {
+    const s = onboardedState();
+    s.workouts.push({ id: 'w1', date: '2026-10-20', dayId: null, entries: [{ exerciseId: 'push-up', sets: [{ reps: 3, weightKg: 0 }] }], durationMin: null, notes: '' });
+    const { app: a2, root: r2, repo } = await makeApp(s);
+    repo.setDraft('free', { editingId: 'w1', date: '2026-10-20', durationMin: null, notes: '', entries: [{ exerciseId: 'push-up', sets: [{ reps: 3, weightKg: 0 }] }], activeMs: 0, resumedAt: null });
+    await go(a2, '/log/free');
+    change(r2.querySelector<HTMLInputElement>('input[aria-label="Push-up set 1 reps"]')!, '9');
+    expect((repo.draft('free') as { editingId?: string }).editingId).toBe('w1');
+  });
+
+  it('readDraft keeps a valid editingId and drops a bad one', () => {
+    expect(readDraft({ entries: [], editingId: 'w1' })!.editingId).toBe('w1');
+    expect(readDraft({ entries: [], editingId: 5 })!.editingId).toBeUndefined();
+    expect(readDraft({ entries: [], editingId: 'a/b' })!.editingId).toBeUndefined();
+  });
+
   it('readDraft accepts only well-formed drafts', () => {
     expect(readDraft(null)).toBeNull();
     expect(readDraft('x')).toBeNull();
@@ -597,9 +629,10 @@ describe('workout logging', () => {
       expect(Number(weight.max)).toBe(units === 'kg' ? MAX_WEIGHT_KG : 2204.6);
       change(weight, typed);
       const shown = weight.value;
+      const before = new Set(state().workouts.map((w) => w.id));
       root.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
       await settle(app);
-      return { shown, savedKg: state().workouts.at(-1)!.entries[0].sets[0].weightKg };
+      return { shown, savedKg: state().workouts.find((w) => !before.has(w.id))!.entries[0].sets[0].weightKg };
     };
     expect(await save('kg', '1500')).toEqual({ shown: '1000', savedKg: 1000 });
     const lb = await save('lb', '3000');
