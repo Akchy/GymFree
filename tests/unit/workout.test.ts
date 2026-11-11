@@ -250,6 +250,16 @@ describe('workout mode', () => {
     await settle(app);
   };
 
+  it('a continued partial workout still shows every exercise of the day', async () => {
+    const { workoutToDraft } = await import('../../src/ui/views/history');
+    const exId = day().exercises[0].exerciseId;
+    const log = { id: 'w1', date: '2026-10-27', dayId: day().id, entries: [{ exerciseId: exId, sets: [{ reps: 5, weightKg: 0 }] }], durationMin: 10, notes: '' };
+    app['repo'].setDraft(day().id, workoutToDraft(log, day()));
+    await go(app, `/workout/${day().id}`);
+    expect(pages()).toHaveLength(day().exercises.length);
+    expect(day().exercises.length).toBeGreaterThan(1);
+  });
+
   it('a draft with editingId updates that workout and keeps editingId while logging', async () => {
     const exId = continueDraft('w1');
     await app['context']().update((s) => {

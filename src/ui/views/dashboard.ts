@@ -1,5 +1,5 @@
 import { weekdayOf } from '../../core/dates';
-import { GOAL_PROFILES, estimateCalories, routineAdvice } from '../../core/planner';
+import { GOAL_PROFILES, estimateCalories, minutesPerExercise, routineAdvice } from '../../core/planner';
 import { weekStreak, workoutsInWeek } from '../../core/progress';
 import { WEEKDAY_NAMES, type PlanDay } from '../../core/types';
 import { getExercise, rangeText } from '../../data/exercises';
@@ -64,12 +64,15 @@ export function renderDashboard(ctx: ViewContext): HTMLElement {
     todayCard = h('section', { class: 'card' }, h('h2', {}, 'No plan yet'), h('a', { href: '#/onboarding', class: 'button primary' }, 'Create a plan'));
   } else {
     const { day, inDays } = next;
+    const startable = !doneToday && inDays === 0;
+    const minutes = Math.round(day.exercises.reduce((sum, pe) => sum + minutesPerExercise(pe), 0));
     const when = inDays === 0 ? 'Today' : inDays === 1 ? 'Tomorrow' : `On ${WEEKDAY_NAMES[day.weekday as number]}`;
     todayCard = h(
       'section',
       { class: 'card highlight', 'aria-labelledby': 'today-title' },
       h('h2', { id: 'today-title' }, inDays === 0 ? (doneToday ? 'Done for today. Great work!' : "Today's workout") : 'Rest day: recover well'),
       h('p', {}, `${when}: `, h('strong', {}, day.name), ` · ${day.muscleGroups.map((g) => MUSCLE_LABELS[g]).join(', ')}`),
+      h('p', { class: 'muted' }, `${day.exercises.length} exercise${day.exercises.length === 1 ? '' : 's'} · ~${minutes} min`),
       h(
         'ul',
         { class: 'compact' },
@@ -78,9 +81,9 @@ export function renderDashboard(ctx: ViewContext): HTMLElement {
           return h('li', {}, h('a', { href: `#/exercises/${pe.exerciseId}?from=home` }, ex?.name ?? pe.exerciseId), ` · ${pe.sets} × ${rangeText(ex, pe.repsMin, pe.repsMax)}`);
         })),
       ),
-      doneToday || inDays !== 0 ? null : h('div', { class: 'row' }, h('a', { href: startWorkoutHref(day.id), class: 'button primary' }, 'Start workout'), reshuffleButton(ctx, day)),
-      doneToday || inDays !== 0 ? null : inProgress(ctx, day.id),
-      doneToday || inDays !== 0 ? otherWorkouts(ctx) : otherWorkouts(ctx, day.id),
+      startable ? h('div', { class: 'row' }, h('a', { href: startWorkoutHref(day.id), class: 'button primary' }, 'Start workout'), reshuffleButton(ctx, day)) : null,
+      startable ? inProgress(ctx, day.id) : null,
+      startable ? otherWorkouts(ctx, day.id) : otherWorkouts(ctx),
     );
   }
 

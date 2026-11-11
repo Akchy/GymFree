@@ -38,6 +38,7 @@ describe('dashboard', () => {
   it("shows today's workout (Tuesday) with stats and nutrition", () => {
     expect(root.querySelector('#today-title')?.textContent).toBe("Today's workout");
     expect(byText(root, 'a', 'Start workout').getAttribute('href')).toBe(`#/log/${state().plan[0].id}`);
+    expect(root.querySelector('.highlight')?.textContent).toMatch(new RegExp(`${state().plan[0].exercises.length} exercises · ~\\d+ min`));
     expect(root.querySelector('.stats')?.textContent).toContain('0/3');
     expect(root.querySelector(`.highlight button[aria-label="New exercises for ${state().plan[0].name}"]`)).not.toBeNull();
     expect(root.textContent).toContain('kcal');
@@ -739,13 +740,37 @@ describe('history', () => {
     expect(rows[1].textContent).toContain('2 ex');
   });
 
+  it('labels a workout of a removed plan day "Workout", not "Free workout"', async () => {
+    await seed();
+    await app['context']().update((s) => {
+      s.workouts[0].dayId = 'gone';
+    });
+    await go(app, '/history');
+    const row = root.querySelector<HTMLAnchorElement>(`a.history-row[href="#/history/${state().workouts[0].id}"]`)!;
+    expect(row.querySelector('strong')?.textContent).toBe('Workout');
+    await go(app, `/history/${state().workouts[0].id}`);
+    expect(root.querySelector('h1')?.textContent).toBe('Workout');
+  });
+
+  it('hides the volume chip for a bodyweight-only workout', async () => {
+    await seed();
+    await app['context']().update((s) => {
+      s.workouts.push({ id: 'bw', date: '2026-10-27', dayId: null, entries: [ex('push-up', [{ reps: 15, weightKg: 0 }])], durationMin: null, notes: '' });
+    });
+    await go(app, '/history/bw');
+    expect([...root.querySelectorAll('.chips .chip')].map((c) => c.textContent)).toEqual(['1 exercise', '1 set']);
+    await go(app, '/history/w1');
+    expect(root.querySelectorAll('.chips .chip')).toHaveLength(3);
+  });
+
   it('has Workouts and Stats tabs', async () => {
     await seed();
     const tabs = () => [...root.querySelectorAll<HTMLAnchorElement>('nav[aria-label="History view"].segmented a')];
     expect(root.querySelector('[role="tab"], [role="tablist"]')).toBeNull();
-    expect(tabs().map((t) => [t.getAttribute('href'), t.getAttribute('aria-current')])).toEqual([['#/history', 'page'], ['#/history?view=stats', null]]);
+    expect(tabs().map((t) => [t.getAttribute('href'), t.getAttribute('aria-current')])).toEqual([['#/history', 'true'], ['#/history?view=stats', null]]);
+    expect(root.querySelectorAll('[aria-current="page"]')).toHaveLength(1); // only the nav bar's
     await go(app, '/history?view=stats');
-    expect(tabs().map((t) => t.getAttribute('aria-current'))).toEqual([null, 'page']);
+    expect(tabs().map((t) => t.getAttribute('aria-current'))).toEqual([null, 'true']);
   });
 
   it('shows an empty state with a link home', async () => {
@@ -772,7 +797,7 @@ describe('history', () => {
   it('redirects /progress to the Stats tab', async () => {
     await go(app, '/progress');
     expect(window.location.hash).toBe('#/history?view=stats');
-    expect(root.querySelector('.segmented a[aria-current="page"]')?.textContent).toBe('Stats');
+    expect(root.querySelector('.segmented a[aria-current="true"]')?.textContent).toBe('Stats');
   });
 
   it('shows stats, a volume bar chart, records and muscle group bars', async () => {
@@ -929,7 +954,31 @@ describe('workout detail and edit', () => {
     });
 
     it('workoutToDraft carries the workout and its id', () => {
-      expect(workoutToDraft(mk())).toMatchObject({ date: today, durationMin: null, notes: 'n', activeMs: 720_000, resumedAt: null, editingId: 'c1' });
+      expect(workoutToDraft(mk(), state().plan[0])).toMatchObject({ date: today, durationMin: null, notes: 'n', activeMs: 720_000, resumedAt: null, editingId: 'c1' });
+    });
+
+    it('workoutToDraft adds the day exercises not yet logged, in plan order', () => {
+      const d = state().plan[0];
+      const draft = workoutToDraft(mk({ entries: [ex(d.exercises[1].exerciseId, [{ reps: 5, weightKg: 0 }])] }), d);
+      expect(draft.entries.map((e) => e.exerciseId)).toEqual([d.exercises[1].exerciseId, ...d.exercises.filter((_, i) => i !== 1).map((pe) => pe.exerciseId)]);
+      expect(draft.entries.slice(1).every((e) => e.sets.length === 1 && e.sets[0].reps === null && e.sets[0].weightKg === null)).toBe(true);
+      expect(d.exercises.length).toBeGreaterThan(2);
+    });
+
+    it('Continue again keeps an unsaved continued session without asking', async () => {
+      await app['context']().update((s) => {
+        s.workouts = [mk()];
+      });
+      phone(true);
+      const dayId = state().plan[0].id;
+      app['repo'].setDraft(dayId, { entries: [], date: today, durationMin: null, notes: 'newer', activeMs: 0, resumedAt: null, editingId: 'c1' });
+      await go(app, '/history/c1');
+      const spy = vi.spyOn(window, 'confirm');
+      byText(root, 'button.primary', 'Continue this workout').click();
+      await settle(app);
+      expect(spy).not.toHaveBeenCalled();
+      expect((app['repo'].draft(dayId) as { notes: string }).notes).toBe('newer');
+      expect(window.location.hash).toBe(`#/workout/${dayId}`);
     });
 
     it('shows the button only on a phone and only when continuable', async () => {

@@ -28,7 +28,7 @@ function dateText(iso: string): string {
 /** The History page: a list of workouts by week, or the Stats tab. */
 export function renderHistory(ctx: ViewContext, view: 'workouts' | 'stats'): HTMLElement {
   const tab = (href: string, label: string, current: boolean) =>
-    h('a', current ? { href, 'aria-current': 'page' } : { href }, label);
+    h('a', current ? { href, 'aria-current': 'true' } : { href }, label);
   return h(
     'main',
     { class: 'container' },
@@ -49,7 +49,7 @@ function workoutList(ctx: ViewContext): HTMLElement {
     return h('div', { class: 'empty' }, h('p', { class: 'muted' }, 'No workouts yet.'), h('a', { href: '#/' }, 'Home'));
   }
   const row = (w: WorkoutLog) => {
-    const dayName = state.plan.find((d) => d.id === w.dayId)?.name ?? 'Free workout';
+    const dayName = titleOf(ctx, w);
     return h(
       'a',
       { class: 'history-row', href: `#/history/${encodeURIComponent(w.id)}` },
@@ -81,7 +81,8 @@ function workoutList(ctx: ViewContext): HTMLElement {
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 function titleOf(ctx: ViewContext, w: WorkoutLog): string {
-  return ctx.state.plan.find((d) => d.id === w.dayId)?.name ?? 'Free workout';
+  if (w.dayId === null) return 'Free workout';
+  return ctx.state.plan.find((d) => d.id === w.dayId)?.name ?? 'Workout';
 }
 
 function notFound(id: string): HTMLElement {
@@ -105,12 +106,16 @@ export function renderWorkoutDetail(ctx: ViewContext, id: string): HTMLElement {
   };
   const dayId = w.dayId;
   let resume: HTMLButtonElement | null = null;
-  if (dayId && isPhone() && canContinue(w, ctx.state.plan, ctx.today())) {
+  const planDay = ctx.state.plan.find((d) => d.id === dayId);
+  if (dayId && planDay && isPhone() && canContinue(w, ctx.state.plan, ctx.today())) {
     resume = h('button', { type: 'button', class: 'primary' }, 'Continue this workout');
     resume.addEventListener('click', () => {
       const existing = readDraft(ctx.repo.draft(dayId));
-      if (ctx.repo.hasDraft(dayId) && existing?.editingId !== w.id && !confirm('Replace your unsaved session?')) return;
-      ctx.repo.setDraft(dayId, workoutToDraft(w));
+      // Already continuing this very workout: keep the newer unsaved sets.
+      if (existing?.editingId !== w.id) {
+        if (ctx.repo.hasDraft(dayId) && !confirm('Replace your unsaved session?')) return;
+        ctx.repo.setDraft(dayId, workoutToDraft(w, planDay));
+      }
       ctx.navigate(`/workout/${dayId}`);
     });
   }
@@ -120,7 +125,7 @@ export function renderWorkoutDetail(ctx: ViewContext, id: string): HTMLElement {
     h('div', { class: 'actions' }, h('a', { href: '#/history' }, '‹ History'), h('a', { href: `#/history/${encodeURIComponent(w.id)}/edit` }, 'Edit')),
     h('h1', {}, titleOf(ctx, w)),
     h('p', { class: 'muted detail-meta' }, w.durationMin ? `${dateText(w.date)} · ${w.durationMin} min` : dateText(w.date)),
-    h('div', { class: 'chips' }, ...[plural(w.entries.length, 'exercise'), plural(sets, 'set'), formatWeight(workoutVolume(w), units)].map((t) => h('span', { class: 'chip' }, t))),
+    h('div', { class: 'chips' }, ...[plural(w.entries.length, 'exercise'), plural(sets, 'set'), workoutVolume(w) > 0 ? formatWeight(workoutVolume(w), units) : null].filter((t): t is string => t !== null).map((t) => h('span', { class: 'chip' }, t))),
     h('ul', { class: 'detail-list' }, ...w.entries.map(line)),
     w.notes ? h('p', { class: 'detail-notes' }, w.notes) : null,
     resume,
@@ -135,9 +140,11 @@ export function canContinue(log: WorkoutLog, plan: readonly PlanDay[], today: st
 }
 
 /** The workout as a draft that workout mode can carry on and save over the same workout. */
-export function workoutToDraft(log: WorkoutLog): WorkoutDraft {
+export function workoutToDraft(log: WorkoutLog, day: PlanDay): WorkoutDraft {
+  const logged = new Set(log.entries.map((e) => e.exerciseId));
+  const rest = day.exercises.filter((pe) => !logged.has(pe.exerciseId)).map((pe) => ({ exerciseId: pe.exerciseId, sets: [{ reps: null, weightKg: null }] }));
   return {
-    entries: structuredClone(log.entries),
+    entries: [...structuredClone(log.entries), ...rest],
     date: log.date,
     durationMin: null,
     notes: log.notes,

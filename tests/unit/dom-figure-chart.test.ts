@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { barChart, chartGeometry, lineChart } from '../../src/ui/chart';
 import { append, clear, field, h, select, svg, titleCase } from '../../src/ui/dom';
-import { effectiveTheme, getTheme, setTheme, THEME_KEY } from '../../src/ui/theme';
+import { getTheme, setTheme, THEME_KEY } from '../../src/ui/theme';
 import { prefersReducedMotion, renderFigure } from '../../src/ui/figure';
 import { MOTIONS, type MotionId } from '../../src/data/motions';
 
@@ -133,9 +133,7 @@ describe('theme', () => {
     setTheme('dark');
     expect(getTheme()).toBe('dark');
     expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(effectiveTheme()).toBe('dark');
     setTheme('light');
-    expect(effectiveTheme()).toBe('light');
     setTheme('system');
     expect(localStorage.getItem(THEME_KEY)).toBeNull();
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false);

@@ -217,7 +217,6 @@ legend { font-weight: 600; margin-bottom: 0.35rem; }
 .exercise-figure .caption { fill: var(--muted); font-size: 12px; }
 .detail { display: grid; gap: 1rem; }
 @media (min-width: 720px) { .detail { grid-template-columns: 360px 1fr; } }
-.link-card { display: flex; flex-direction: column; text-decoration: none; color: var(--text); }
 
 .table-wrap { overflow-x: auto; position: relative; } /* keeps the absolutely positioned sr-only header inside the scroll box */
 table { border-collapse: collapse; width: 100%; }
@@ -233,8 +232,6 @@ th, td { text-align: left; padding: 0.35rem; border-bottom: 1px solid var(--bord
 .bars { list-style: none; padding: 0; }
 .bars li { display: grid; grid-template-columns: 7rem 1fr 2.5rem; gap: 0.5rem; align-items: center; margin: 0.3rem 0; }
 .bar { height: 0.7rem; border-radius: 999px; background: linear-gradient(90deg, var(--accent) var(--w, 0%), var(--accent-soft) var(--w, 0%)); }
-.history { list-style: none; padding: 0; }
-.history li { display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
 .danger-zone { border-color: var(--danger); }
 
 .toast { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%) translateY(150%); background: var(--text); color: var(--bg); padding: 0.6rem 1rem; border-radius: 1.25rem; width: max-content; max-width: min(28rem, calc(100vw - 2rem)); text-align: center; text-wrap: balance; transition: transform 0.25s, opacity 0.25s, visibility 0.25s; z-index: 10; pointer-events: none; opacity: 0; visibility: hidden; }
@@ -348,11 +345,6 @@ meter::-webkit-meter-optimum-value { background: var(--accent); }
 .note-inline { background: var(--accent-soft); padding: 0.5rem 0.75rem; border-radius: 8px; }
 
 /* ---------- Log ---------- */
-.log-head { display: flex; gap: 0.75rem; align-items: center; }
-.log-head h2 { margin: 0; }
-.log-head p { margin: 0.1rem 0 0; }
-.how-to-toggle { margin: 0.5rem 0; }
-.how-to-toggle > summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 input::placeholder { color: var(--muted); opacity: 0.6; }
 
 /* ---------- Install banner ---------- */
@@ -384,8 +376,6 @@ input::placeholder { color: var(--muted); opacity: 0.6; }
 .promise { background: var(--accent-soft); border-radius: var(--radius); padding: 1.25rem 1.5rem; display: grid; gap: 0.5rem; }
 .promise p { margin: 0; }
 .landing-footer { padding: 2rem 0 0; text-align: center; }
-.link-card.today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.link-card strong { display: flex; align-items: center; gap: 0.5rem; }
 .log-title { display: flex; flex-direction: column; }
 /* Workout timer on the log form (the same clock as workout mode). */
 .log-clock { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.9rem; padding: 0.6rem 0.9rem; margin: 0.75rem 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
@@ -393,7 +383,6 @@ input::placeholder { color: var(--muted); opacity: 0.6; }
 .log-clock.running { border-color: var(--accent); }
 .log-clock.running .log-clock-time { color: var(--accent); }
 .log-clock button { margin-left: auto; }
-.link-card .badge.in-progress { align-self: flex-start; margin-top: 0.4rem; }
 
 /* ---------- Exercise roulette (home page toy) ---------- */
 .today-row { display: grid; gap: 0 0.75rem; }
@@ -626,7 +615,6 @@ body:has(.reel) .toast.show { transform: translateX(-50%) translateY(0); }
 .reel-rest-adjust { display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.35rem; visibility: hidden; }
 .reel-page[data-mode='rest'] .reel-rest-adjust { visibility: visible; }
 .reel-rest-btn { padding: 0.3rem 0.8rem; border-radius: 999px; border: 1px solid var(--border); background: var(--accent-soft); color: var(--text); font-size: 0.85rem; font-weight: 600; touch-action: manipulation; }
-.chart .bar { height: auto; background: none; fill: var(--accent); }
 
 /* ---------- Restyle: buttons, inputs, choices (not in workout mode, which keeps its own look) ---------- */
 :where(body:not(:has(.reel))) input, :where(body:not(:has(.reel))) select, :where(body:not(:has(.reel))) textarea, :where(body:not(:has(.reel))) button, :where(body:not(:has(.reel))) .button { border-radius: 12px; min-height: 44px; }
