@@ -51,6 +51,33 @@ describe('dashboard', () => {
     expect(labels()).toBe(before);
   });
 
+  it('has a settings gear link on Home', () => {
+    const gear = root.querySelector('a.settings-link')!;
+    expect(gear.getAttribute('href')).toBe('#/settings');
+    expect(gear.getAttribute('aria-label')).toBe('Settings');
+  });
+
+  it('offers a different workout under Start, with in-progress badges', () => {
+    const s = state();
+    const ctx = fakeContext(s);
+    ctx.repo.setDraft(s.plan[1].id, { x: 1 });
+    const view = renderDashboard(ctx);
+    const details = view.querySelector('details.other-workouts')!;
+    expect(details.querySelector('summary')?.textContent).toBe('Different workout');
+    expect(details.querySelector(`a[href="#/log/${s.plan[0].id}"]`)).toBeNull(); // today's day is the Start button
+    for (const d of s.plan.slice(1)) expect(details.querySelector(`a[href="#/log/${d.id}"]`)).not.toBeNull();
+    expect(details.querySelector('a[href="#/log/free"]')?.textContent).toContain('Free workout');
+    expect(details.querySelector('.badge.in-progress')?.textContent).toBe('Unsaved workout in progress');
+    expect(details.querySelectorAll('.badge.in-progress')).toHaveLength(1);
+  });
+
+  it('shows an in-progress badge on the Start card when today has a draft', () => {
+    const s = state();
+    const ctx = fakeContext(s);
+    ctx.repo.setDraft(s.plan[0].id, { x: 1 });
+    expect(renderDashboard(ctx).querySelector('.highlight .badge.in-progress')).not.toBeNull();
+  });
+
   it('shows rest days, completed days and empty plans', () => {
     const s = onboardedState();
     s.routine.trainingDays = [2];
@@ -60,6 +87,9 @@ describe('dashboard', () => {
     expect(view.querySelector('#today-title')?.textContent).toMatch(/Rest day/);
     expect(view.textContent).toContain('Tomorrow');
     expect(view.textContent).not.toContain('kcal');
+    expect(view.querySelectorAll('details.other-workouts li a')).toHaveLength(s.plan.length + 1); // every day + Free workout
+    expect(byText(view, 'summary', 'Different workout')).not.toBeNull();
+    expect(view.querySelector('a[href="#/log/free"]')).not.toBeNull();
 
     const done = onboardedState();
     done.workouts.push({ id: 'w1', date: '2026-10-27', dayId: null, entries: [], durationMin: null, notes: '' });

@@ -46,7 +46,7 @@ describe('workout mode', () => {
 
   it('shows one full-screen page per exercise, without the site top bar', async () => {
     await go(app, `/workout/${day().id}`);
-    expect(root.querySelector('.topbar')).toBeNull();
+    expect(root.querySelector('.appnav')).toBeNull();
     expect(pages()).toHaveLength(day().exercises.length);
     expect(pages()[0].querySelector('h2')?.textContent).toBe(getExercise(day().exercises[0].exerciseId)!.name);
     expect(pages()[0].textContent).toContain('No sets yet');
@@ -245,13 +245,13 @@ describe('workout mode', () => {
     expect(byText(root, 'a', 'Start workout').getAttribute('href')).toBe(`#/workout/${id}`);
     await go(app, `/log/${id}`);
     expect(byText(root, 'a', 'Switch to workout mode').getAttribute('href')).toBe(`#/workout/${id}`);
-    // On a phone the home button starts workout mode even on a rest day
+    // On a rest day, "Different workout" links go to workout mode on phones, the list view elsewhere
     const rest = onboardedState();
     rest.routine.trainingDays = [5];
     rest.plan = generatePlan(rest.goal, rest.routine, rest.profile);
-    expect(byText(renderDashboard(fakeContext(rest)), 'a', 'Start workout').getAttribute('href')).toBe(`#/workout/${rest.plan[0].id}`);
+    expect(renderDashboard(fakeContext(rest)).querySelector('.other-workouts a')?.getAttribute('href')).toBe(`#/workout/${rest.plan[0].id}`);
     phone = false;
-    expect(byText(renderDashboard(fakeContext(rest)), 'a', 'Log this workout').getAttribute('href')).toBe(`#/log/${rest.plan[0].id}`);
+    expect(renderDashboard(fakeContext(rest)).querySelector('.other-workouts a')?.getAttribute('href')).toBe(`#/log/${rest.plan[0].id}`);
     await go(app, '/');
     expect(byText(root, 'a', 'Start workout').getAttribute('href')).toBe(`#/log/${id}`);
     await go(app, '/plan');
@@ -296,7 +296,7 @@ describe('workout mode', () => {
   it('sends unknown days to the not-found page and free workouts to the list view', async () => {
     await go(app, '/workout/nope');
     expect(root.querySelector('.reel')).toBeNull();
-    expect(root.querySelector('.topbar')).not.toBeNull();
+    expect(root.querySelector('.appnav')).not.toBeNull();
     await go(app, '/workout/free');
     await settle(app);
     expect(window.location.hash).toBe('#/log/free');

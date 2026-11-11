@@ -4,10 +4,11 @@ import { weekStreak, workoutsInWeek } from '../../core/progress';
 import { WEEKDAY_NAMES, type PlanDay } from '../../core/types';
 import { getExercise, rangeText } from '../../data/exercises';
 import type { ViewContext } from '../context';
-import { isPhone, startWorkoutHref } from '../device';
-import { h } from '../dom';
+import { startWorkoutHref } from '../device';
+import { h, svg } from '../dom';
+import { GEAR_ICON } from '../nav';
 import { MUSCLE_LABELS } from '../labels';
-import { animateArrivals, reshuffleButton } from './plan';
+import { animateArrivals, dayLabel, orderedDays, reshuffleButton } from './plan';
 import { renderSpinWheel } from './wheel';
 
 export function nextPlanDay(plan: readonly PlanDay[], todayWeekday: number): { day: PlanDay; inDays: number } | null {
@@ -30,6 +31,26 @@ function stat(label: string, value: string | number): HTMLElement {
  * new exercises for today) doesn't redraw it with a different set or lose the last pick.
  */
 let wheel: HTMLElement | null = null;
+
+function inProgress(ctx: ViewContext, dayId: string): HTMLElement | null {
+  return ctx.repo.hasDraft(dayId) ? h('span', { class: 'badge in-progress' }, 'Unsaved workout in progress') : null;
+}
+
+/** "Different workout": any other plan day, or a free workout. */
+function otherWorkouts(ctx: ViewContext, skipId?: string): HTMLElement {
+  const days = orderedDays(ctx.state.plan).filter((d) => d.id !== skipId);
+  return h(
+    'details',
+    { class: 'other-workouts' },
+    h('summary', {}, 'Different workout'),
+    h(
+      'ul',
+      { class: 'other-list' },
+      ...days.map((d) => h('li', {}, h('a', { href: startWorkoutHref(d.id) }, `${d.name} · ${dayLabel(d)}`), inProgress(ctx, d.id))),
+      h('li', {}, h('a', { href: '#/log/free' }, 'Free workout')),
+    ),
+  );
+}
 
 export function renderDashboard(ctx: ViewContext): HTMLElement {
   const { state } = ctx;
@@ -57,13 +78,9 @@ export function renderDashboard(ctx: ViewContext): HTMLElement {
           return h('li', {}, h('a', { href: `#/exercises/${pe.exerciseId}?from=home` }, ex?.name ?? pe.exerciseId), ` · ${pe.sets} × ${rangeText(ex, pe.repsMin, pe.repsMax)}`);
         })),
       ),
-      h(
-        'div',
-        { class: 'row' },
-        // Phones always start workout mode; elsewhere, a day that isn't due today is logged in the list view.
-        h('a', { href: startWorkoutHref(day.id), class: 'button primary' }, isPhone() || (inDays === 0 && !doneToday) ? 'Start workout' : 'Log this workout'),
-        reshuffleButton(ctx, day),
-      ),
+      doneToday || inDays !== 0 ? null : h('div', { class: 'row' }, h('a', { href: startWorkoutHref(day.id), class: 'button primary' }, 'Start workout'), reshuffleButton(ctx, day)),
+      doneToday || inDays !== 0 ? null : inProgress(ctx, day.id),
+      doneToday || inDays !== 0 ? otherWorkouts(ctx) : otherWorkouts(ctx, day.id),
     );
   }
 
@@ -82,8 +99,17 @@ export function renderDashboard(ctx: ViewContext): HTMLElement {
     'main',
     { class: 'container' },
     installCard,
-    h('h1', {}, state.profile.name ? `Hi, ${state.profile.name}` : 'Your training'),
-    h('p', { class: 'muted' }, `Goal: ${GOAL_PROFILES[state.goal].label}`),
+    h(
+      'header',
+      { class: 'home-head' },
+      h(
+        'div',
+        {},
+        h('h1', {}, state.profile.name ? `Hi, ${state.profile.name}` : 'Your training'),
+        h('p', { class: 'muted' }, `${new Date(`${today}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })} · Goal: ${GOAL_PROFILES[state.goal].label}`),
+      ),
+      h('a', { href: '#/settings', class: 'settings-link', 'aria-label': 'Settings' }, svg('svg', { viewBox: '0 0 24 24', width: 24, height: 24, 'aria-hidden': 'true', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, svg('path', { d: GEAR_ICON }))),
+    ),
     h('div', { class: 'today-row' }, todayCard, (wheel ??= renderSpinWheel())),
     h(
       'section',

@@ -210,39 +210,25 @@ describe('App: links opened before choosing where the data lives', () => {
 });
 
 describe('App: everyday use', () => {
-  it('has a theme toggle and no lock button in the header', async () => {
-    localStorage.removeItem('gymx:theme');
-    const { app, root } = await makeApp(onboardedState());
+  it('renders the main nav with four items and no hamburger or header theme toggle', async () => {
+    const { root } = await makeApp(onboardedState());
+    const nav = root.querySelector('nav.appnav')!;
+    expect([...nav.querySelectorAll('a:not(.brand):not(.nav-settings)')].map((a) => a.textContent)).toEqual(['Home', 'History', 'Plan', 'Exercises']);
+    expect(nav.querySelector('a.nav-settings')?.getAttribute('href')).toBe('#/settings');
+    expect(root.querySelector('.menu-toggle')).toBeNull();
+    expect(root.querySelector('.theme-toggle')).toBeNull();
+    expect(root.querySelector('header.topbar')).toBeNull();
     expect(root.querySelector('button[aria-label="Lock app"]')).toBeNull();
-    const toggle = root.querySelector<HTMLButtonElement>('button[aria-label="Switch to dark theme"]')!;
-    toggle.click();
-    expect(root.querySelector('.theme-toggle')).toBe(toggle); // updated in place, no re-render
-    expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(localStorage.getItem('gymx:theme')).toBe('dark');
-    root.querySelector<HTMLButtonElement>('button[aria-label="Switch to light theme"]')!.click();
-    await settle(app);
-    expect(document.documentElement.dataset.theme).toBe('light');
-    localStorage.removeItem('gymx:theme');
-    document.documentElement.removeAttribute('data-theme');
   });
 
-  it('opens and closes the mobile menu', async () => {
-    const { root } = await makeApp(onboardedState());
-    const header = root.querySelector('header')!;
-    const btn = root.querySelector<HTMLButtonElement>('button.menu-toggle')!;
-    expect(btn.getAttribute('aria-controls')).toBe(root.querySelector('nav')!.id);
-    btn.click();
-    expect(header.classList.contains('menu-open')).toBe(true);
-    expect(btn.getAttribute('aria-expanded')).toBe('true');
-    expect(btn.getAttribute('aria-label')).toBe('Close menu');
-    header.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    expect(header.classList.contains('menu-open')).toBe(false);
-    btn.click();
-    document.body.click(); // outside the header
-    expect(header.classList.contains('menu-open')).toBe(false);
-    btn.click();
-    root.querySelector<HTMLAnchorElement>('nav a[aria-current="page"]')!.click();
-    expect(header.classList.contains('menu-open')).toBe(false);
+  it('marks the active nav item for each route', async () => {
+    const { app, root } = await makeApp(onboardedState());
+    const current = () => [...root.querySelectorAll('nav.appnav [aria-current="page"]')].map((a) => a.getAttribute('href'));
+    expect(current()).toEqual(['#/']);
+    for (const [path, href] of [['/log/free', '#/'], ['/history/x', '#/history'], ['/plan/edit/x', '#/plan'], ['/exercises', '#/exercises'], ['/settings', '#/settings']]) {
+      await go(app, path);
+      expect(current()).toEqual([href]);
+    }
   });
 
   it('redirects to onboarding until it is finished, and handles unknown routes', async () => {
