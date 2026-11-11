@@ -954,7 +954,7 @@ describe('workout detail and edit', () => {
       const spy = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
       byText(root, 'button.primary', 'Continue this workout').click();
       await settle(app);
-      expect(spy).toHaveBeenCalledWith('Replace your unsaved session for this day?');
+      expect(spy).toHaveBeenCalledWith('Replace your unsaved session?');
       expect((app['repo'].draft(dayId) as { notes: string }).notes).toBe('other');
       byText(root, 'button.primary', 'Continue this workout').click();
       await settle(app);

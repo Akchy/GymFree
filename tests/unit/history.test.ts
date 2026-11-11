@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupByWeek, removeWorkout, upsertWorkout } from '../../src/core/history';
+import { groupByWeek, removeWorkout, saveWorkout, upsertWorkout } from '../../src/core/history';
 import type { WorkoutLog } from '../../src/core/types';
 import { onboardedState } from './helpers';
 
@@ -28,6 +28,32 @@ describe('upsertWorkout', () => {
     s.workouts = [w('a', '2026-10-10'), w('c', '2026-10-20')];
     upsertWorkout(s, w('b', '2026-10-15'), '2026-10-27T10:00:00.000Z');
     expect(s.workouts.map((x) => x.id)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('saveWorkout', () => {
+  const now = '2026-10-27T10:00:00.000Z';
+  it('updates an existing workout in place when editing', () => {
+    const s = onboardedState();
+    s.workouts = [w('w1', '2026-10-20', { notes: 'old' })];
+    saveWorkout(s, w('w1', '2026-10-20', { notes: 'new' }), now, true, () => 'fresh');
+    expect(s.workouts.map((x) => [x.id, x.notes])).toEqual([['w1', 'new']]);
+  });
+  it('saves under a fresh id when the edited workout is gone or deleted', () => {
+    const s = onboardedState();
+    s.workouts = [];
+    saveWorkout(s, w('w1', '2026-10-20'), now, true, () => 'fresh');
+    expect(s.workouts.map((x) => x.id)).toEqual(['fresh']);
+    s.workouts = [w('w1', '2026-10-20')];
+    s.deletedWorkoutIds = ['w1'];
+    saveWorkout(s, w('w1', '2026-10-20', { notes: 'x' }), now, true, () => 'fresh2');
+    expect(s.workouts.map((x) => x.id).sort()).toEqual(['fresh2', 'w1']);
+  });
+  it('keeps the given id for a new (not editing) workout', () => {
+    const s = onboardedState();
+    s.workouts = [];
+    saveWorkout(s, w('n1', '2026-10-20'), now, false, () => 'fresh');
+    expect(s.workouts.map((x) => x.id)).toEqual(['n1']);
   });
 });
 

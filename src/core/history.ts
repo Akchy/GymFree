@@ -18,6 +18,15 @@ export function upsertWorkout(state: AppState, log: WorkoutLog, nowIso: string):
   state.workouts.sort((x, y) => x.date.localeCompare(y.date) || x.id.localeCompare(y.id));
 }
 
+/**
+ * Saves a log. When it edits an existing workout (`editing`) that has since been deleted (locally or
+ * by a sync), it is saved as a new workout under `newId()` so a deleted id never comes back.
+ */
+export function saveWorkout(state: AppState, log: WorkoutLog, nowIso: string, editing: boolean, newId: () => string): void {
+  const gone = editing && (!state.workouts.some((w) => w.id === log.id) || state.deletedWorkoutIds.includes(log.id));
+  upsertWorkout(state, gone ? { ...log, id: newId() } : log, nowIso);
+}
+
 /** Deletes a workout and remembers the id so syncing doesn't bring it back. */
 export function removeWorkout(state: AppState, id: string): void {
   state.workouts = state.workouts.filter((w) => w.id !== id);

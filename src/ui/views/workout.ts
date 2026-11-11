@@ -7,7 +7,7 @@
  */
 import { isISODate } from '../../core/dates';
 import { randomId } from '../../core/encoding';
-import { upsertWorkout } from '../../core/history';
+import { saveWorkout } from '../../core/history';
 import { clampNumber, cleanText, MAX_NOTES, MAX_TARGET_SECONDS, MAX_WEIGHT_KG } from '../../core/state';
 import type { PlannedExercise, WorkoutLog } from '../../core/types';
 import { fromDisplayWeight, round, toDisplayWeight } from '../../core/units';
@@ -445,14 +445,7 @@ export function renderWorkout(ctx: ViewContext, dayId: string): HTMLElement {
       notes: cleanText(restored?.notes ?? '', MAX_NOTES),
     };
     stopAll();
-    await ctx.update(
-      (s) => {
-        // A workout deleted meanwhile is never brought back: the sets are saved as a new one.
-        const gone = !!restored?.editingId && (!s.workouts.some((w) => w.id === log.id) || s.deletedWorkoutIds.includes(log.id));
-        upsertWorkout(s, gone ? { ...log, id: randomId(8) } : log, new Date().toISOString());
-      },
-      { render: false },
-    );
+    await ctx.update((s) => saveWorkout(s, log, new Date().toISOString(), !!restored?.editingId, () => randomId(8)), { render: false });
     ctx.repo.setDraft(dayId, null);
     ctx.toast('Workout saved. Nice job!');
     ctx.navigate('/history');

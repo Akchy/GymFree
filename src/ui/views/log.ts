@@ -8,7 +8,7 @@ import { h } from '../dom';
 import { numberWheel } from '../number-wheel';
 import { renderSetEditor, type DraftEntry, type DraftSet } from '../set-editor';
 import { isPhone } from '../device';
-import { upsertWorkout } from '../../core/history';
+import { saveWorkout } from '../../core/history';
 import { dayLabel } from './plan';
 
 export { lastWeight } from '../set-editor';
@@ -220,14 +220,7 @@ export function renderLogForm(ctx: ViewContext, dayId: string): HTMLElement {
       durationMin: durationManual && duration.value !== '' ? Math.round(clampNumber(duration.value, 0, 600, 0)) : clockMs() > 0 ? clockMinutes() : null,
       notes: cleanText(notes.value, MAX_NOTES),
     };
-    await ctx.update(
-      (s) => {
-        // A workout deleted meanwhile is never brought back: the sets are saved as a new one.
-        const gone = !!restored?.editingId && (!s.workouts.some((w) => w.id === log.id) || s.deletedWorkoutIds.includes(log.id));
-        upsertWorkout(s, gone ? { ...log, id: randomId(8) } : log, new Date().toISOString());
-      },
-      { render: false },
-    );
+    await ctx.update((s) => saveWorkout(s, log, new Date().toISOString(), !!restored?.editingId, () => randomId(8)), { render: false });
     ctx.repo.setDraft(dayId, null);
     ctx.toast('Workout saved. Nice job!');
     ctx.navigate('/history');

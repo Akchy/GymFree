@@ -1,6 +1,6 @@
 import { randomId } from '../../core/encoding';
 import { isISODate, parseISODate } from '../../core/dates';
-import { groupByWeek, removeWorkout, upsertWorkout } from '../../core/history';
+import { groupByWeek, removeWorkout, saveWorkout } from '../../core/history';
 import { workoutVolume } from '../../core/progress';
 import { clampNumber, cleanText, MAX_NOTES } from '../../core/state';
 import type { PlanDay, WorkoutLog } from '../../core/types';
@@ -12,7 +12,7 @@ import { isPhone } from '../device';
 import { h } from '../dom';
 import { numberWheel } from '../number-wheel';
 import { renderSetEditor, type DraftEntry } from '../set-editor';
-import { draftToEntries, type WorkoutDraft } from './log';
+import { draftToEntries, readDraft, type WorkoutDraft } from './log';
 import { renderNotFound } from './notfound';
 import { renderStats } from './progress';
 
@@ -108,8 +108,8 @@ export function renderWorkoutDetail(ctx: ViewContext, id: string): HTMLElement {
   if (dayId && isPhone() && canContinue(w, ctx.state.plan, ctx.today())) {
     resume = h('button', { type: 'button', class: 'primary' }, 'Continue this workout');
     resume.addEventListener('click', () => {
-      const existing = ctx.repo.draft(dayId) as { editingId?: unknown } | null;
-      if (ctx.repo.hasDraft(dayId) && existing?.editingId !== w.id && !confirm('Replace your unsaved session for this day?')) return;
+      const existing = readDraft(ctx.repo.draft(dayId));
+      if (ctx.repo.hasDraft(dayId) && existing?.editingId !== w.id && !confirm('Replace your unsaved session?')) return;
       ctx.repo.setDraft(dayId, workoutToDraft(w));
       ctx.navigate(`/workout/${dayId}`);
     });
@@ -189,14 +189,7 @@ export function renderWorkoutEdit(ctx: ViewContext, id: string): HTMLElement {
       durationMin: duration.value !== '' ? Math.round(clampNumber(duration.value, 0, 600, 0)) : null,
       notes: cleanText(notes.value, MAX_NOTES),
     };
-    await ctx.update(
-      (s) => {
-        // A workout deleted meanwhile is never brought back: the edit is saved as a new one.
-        const gone = !s.workouts.some((x) => x.id === log.id) || s.deletedWorkoutIds.includes(log.id);
-        upsertWorkout(s, gone ? { ...log, id: randomId(8) } : log, new Date().toISOString());
-      },
-      { render: false },
-    );
+    await ctx.update((s) => saveWorkout(s, log, new Date().toISOString(), true, () => randomId(8)), { render: false });
     ctx.toast('Workout updated.');
     ctx.navigate(back.slice(1));
   });
